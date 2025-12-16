@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debbot - OBS & Twitch Control</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1>Debbot</h1>
+            <div class="status-bar">
+                <div class="status-item">
+                    <span class="status-label">OBS:</span>
+                    <span id="obs-status" class="status disconnected">Disconnected</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Twitch:</span>
+                    <span id="twitch-status" class="status disconnected">Disconnected</span>
+                </div>
+            </div>
+        </header>
+
+        <nav class="nav">
+            <button id="actions-tab" class="nav-tab active">Actions</button>
+            <button id="settings-tab" class="nav-tab">Settings</button>
+            <button id="logs-tab" class="nav-tab">Logs</button>
+        </nav>
+
+        <main class="main-content">
+            <!-- Actions Tab -->
+            <div id="actions-panel" class="panel active">
+                <div class="panel-header">
+                    <h2>Actions & Commands</h2>
+                    <button id="add-action-btn" class="btn btn-primary">Add Action</button>
+                </div>
+                <div id="actions-list" class="actions-list">
+                    <!-- Actions will be populated here -->
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settings-panel" class="panel">
+                <h2>Settings</h2>
+                <div class="settings-section">
+                    <h3>OBS Configuration</h3>
+                    <div class="form-group">
+                        <label for="obs-host">OBS Host:</label>
+                        <input type="text" id="obs-host" placeholder="localhost" value="localhost">
+                    </div>
+                    <div class="form-group">
+                        <label for="obs-port">OBS Port:</label>
+                        <input type="number" id="obs-port" placeholder="4455" value="4455">
+                    </div>
+                    <div class="form-group">
+                        <label for="obs-password">OBS Password:</label>
+                        <input type="password" id="obs-password" placeholder="Optional">
+                    </div>
+                    <div class="settings-buttons">
+                        <button id="obs-connect-btn" class="btn btn-success">Connect to OBS</button>
+                        <button id="obs-disconnect-btn" class="btn btn-danger" disabled>Disconnect</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h3>Twitch Configuration</h3>
+                    <div class="form-group">
+                        <label for="twitch-username">Twitch Username:</label>
+                        <input type="text" id="twitch-username" placeholder="your_twitch_username">
+                    </div>
+                    <div class="form-group">
+                        <label for="twitch-oauth">OAuth Token:</label>
+                        <input type="password" id="twitch-oauth" placeholder="oauth:your_token_here">
+                    </div>
+                    <div class="form-group">
+                        <label for="twitch-channel">Channel:</label>
+                        <input type="text" id="twitch-channel" placeholder="your_channel_name">
+                    </div>
+                    <div class="settings-buttons">
+                        <button id="twitch-connect-btn" class="btn btn-success">Connect to Twitch</button>
+                        <button id="twitch-disconnect-btn" class="btn btn-danger" disabled>Disconnect</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
+                </div>
+            </div>
+
+            <!-- Logs Tab -->
+            <div id="logs-panel" class="panel">
+                <div class="panel-header">
+                    <h2>Activity Logs</h2>
+                    <button id="clear-logs-btn" class="btn btn-secondary">Clear Logs</button>
+                </div>
+                <div id="logs-container" class="logs-container">
+                    <!-- Logs will be populated here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Action Editor Modal -->
+    <div id="action-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Create Action</h3>
+                <button id="modal-close" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="action-name">Action Name:</label>
+                    <input type="text" id="action-name" placeholder="Enter action name">
+                </div>
+                <div class="form-group">
+                    <label for="action-trigger">Trigger:</label>
+                    <select id="action-trigger">
+                        <option value="command">Chat Command</option>
+                        <option value="manual">Manual</option>
+                        <option value="timer">Timer</option>
+                    </select>
+                </div>
+                <div class="form-group" id="command-group">
+                    <label for="action-command">Command:</label>
+                    <input type="text" id="action-command" placeholder="!command">
+                </div>
+                <div class="form-group">
+                    <label>Actions:</label>
+                    <div id="action-steps" class="action-steps">
+                        <!-- Action steps will be added here -->
+                    </div>
+                    <button id="add-step-btn" class="btn btn-secondary">Add Step</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="save-action-btn" class="btn btn-primary">Save Action</button>
+                <button id="cancel-action-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
