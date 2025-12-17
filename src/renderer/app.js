@@ -110,6 +110,17 @@ class DebbotApp {
             window.electronAPI.onActionTriggered((event, action) => this.onActionTriggered(action));
             window.electronAPI.onLogMessage((event, log) => this.addLogEntry(log));
         }
+
+        // IPC event listener for playing sounds
+        if (window.electronAPI && window.electronAPI.onPlaySound) {
+            window.electronAPI.onPlaySound((event, soundPath) => {
+                console.log('Received play-sound IPC event:', soundPath);
+                this.playSound(soundPath);
+            });
+            console.log('IPC event listener for play-sound registered via electronAPI');
+        } else {
+            console.error('electronAPI.onPlaySound not available');
+        }
     }
 
     async loadInitialData() {
@@ -350,7 +361,19 @@ class DebbotApp {
         document.getElementById('action-steps').innerHTML = '';
     }
 
+    collectCurrentStepValues() {
+        // Collect current values from all step form elements
+        const stepElements = document.querySelectorAll('.action-step');
+        this.currentAction.steps = Array.from(stepElements).map(stepElement => ({
+            type: stepElement.querySelector('.step-type').value,
+            value: stepElement.querySelector('.step-value').value.trim()
+        }));
+    }
+
     addActionStep() {
+        // First, collect current step values from the form before adding new step
+        this.collectCurrentStepValues();
+
         const step = {
             type: 'obs_scene',
             value: ''
@@ -361,6 +384,8 @@ class DebbotApp {
     }
 
     removeActionStep(index) {
+        // First collect current values, then remove the step
+        this.collectCurrentStepValues();
         this.currentAction.steps.splice(index, 1);
         this.renderActionSteps();
     }
@@ -380,9 +405,10 @@ class DebbotApp {
                     <option value="obs_start_streaming" ${step.type === 'obs_start_streaming' ? 'selected' : ''}>Start OBS Streaming</option>
                     <option value="obs_stop_streaming" ${step.type === 'obs_stop_streaming' ? 'selected' : ''}>Stop OBS Streaming</option>
                     <option value="twitch_message" ${step.type === 'twitch_message' ? 'selected' : ''}>Send Twitch Message</option>
+                    <option value="play_sound" ${step.type === 'play_sound' ? 'selected' : ''}>Play Sound</option>
                     <option value="delay" ${step.type === 'delay' ? 'selected' : ''}>Delay</option>
                 </select>
-                <input type="text" class="step-value" placeholder="Scene/Source name, message, or delay (ms)" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' ? 'disabled' : ''}>
+                <input type="text" class="step-value" placeholder="${step.type === 'play_sound' ? 'Path to audio file' : step.type === 'delay' ? 'Delay in milliseconds' : step.type === 'twitch_message' ? 'Message to send' : 'Scene/Source name'}" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' ? 'disabled' : ''}>
                 <button class="step-remove" onclick="app.removeActionStep(${index})">×</button>
             `;
 
@@ -425,11 +451,16 @@ class DebbotApp {
         try {
             if (this.actions.find(a => a.id === this.currentAction.id)) {
                 // Update existing action
-                await window.electronAPI.updateAction(this.currentAction.id, this.currentAction);
+                const updatedAction = await window.electronAPI.updateAction(this.currentAction.id, this.currentAction);
+                // Update the local actions array with the updated action
+                const index = this.actions.findIndex(a => a.id === this.currentAction.id);
+                if (index !== -1) {
+                    this.actions[index] = updatedAction;
+                }
             } else {
                 // Create new action
-                await window.electronAPI.createAction(this.currentAction);
-                this.actions.push(this.currentAction);
+                const createdAction = await window.electronAPI.createAction(this.currentAction);
+                this.actions.push(createdAction);
             }
 
             this.renderActions();
@@ -465,6 +496,26 @@ class DebbotApp {
         }
     }
 
+    async testAction(actionId) {
+        const action = this.actions.find(a => a.id === actionId);
+        if (!action) {
+            console.error('Action not found for testing:', actionId);
+            this.addLogEntry({ level: 'error', message: 'Action not found for testing' });
+            return;
+        }
+
+        this.addLogEntry({ level: 'info', message: `Testing action: ${action.name}` });
+
+        try {
+            // Execute the action directly without permission checks
+            await window.electronAPI.testAction(actionId);
+            this.addLogEntry({ level: 'success', message: `Test completed: ${action.name}` });
+        } catch (error) {
+            console.error('Test action error:', error);
+            this.addLogEntry({ level: 'error', message: `Test failed: ${error.message}` });
+        }
+    }
+
     renderActions() {
         const container = document.getElementById('actions-list');
         container.innerHTML = '';
@@ -487,6 +538,7 @@ class DebbotApp {
                     <div class="action-details">${triggerText} • ${action.steps.length} step${action.steps.length !== 1 ? 's' : ''}</div>
                 </div>
                 <div class="action-controls">
+                    <button class="btn btn-success" onclick="app.testAction('${action.id}')">Test</button>
                     <button class="btn btn-secondary" onclick="app.openActionModal('${action.id}')">Edit</button>
                     <button class="btn btn-danger" onclick="app.deleteAction('${action.id}')">Delete</button>
                 </div>
@@ -570,6 +622,126 @@ class DebbotApp {
             }
         } else {
             this.addLogEntry({ level: 'warn', message: 'Twitch settings incomplete - skipping auto-connect' });
+        }
+    }
+
+    playSound(soundPath) {
+        try {
+            console.log('Playing sound from renderer:', soundPath);
+            console.log('Audio context state:', window.AudioContext ? new AudioContext().state : 'No AudioContext');
+
+            // For local files, try using file:// protocol
+            let audioUrl = soundPath;
+            if (!soundPath.startsWith('http') && !soundPath.startsWith('file://')) {
+                // Convert local path to file:// URL
+                audioUrl = `file://${soundPath}`;
+            }
+
+            console.log('Using audio URL:', audioUrl);
+
+            // Create audio element and play the sound
+            const audio = new Audio();
+            audio.volume = 0.8; // Set reasonable default volume
+            audio.crossOrigin = 'anonymous'; // Try to avoid CORS issues
+
+            // Add comprehensive event listeners for debugging
+            audio.onloadstart = () => console.log('Audio load started');
+            audio.oncanplay = () => console.log('Audio can play');
+            audio.onloadeddata = () => console.log('Audio data loaded');
+            audio.onloadedmetadata = () => console.log('Audio metadata loaded');
+            audio.onprogress = () => console.log('Audio loading progress');
+            audio.onstalled = () => console.log('Audio stalled');
+            audio.onsuspend = () => console.log('Audio suspended');
+            audio.onabort = () => console.log('Audio aborted');
+
+            audio.onerror = (e) => {
+                console.error('Audio error event:', e);
+                console.error('Audio error code:', audio.error?.code);
+                console.error('Audio error message:', audio.error?.message);
+                console.error('Audio network state:', audio.networkState);
+                console.error('Audio ready state:', audio.readyState);
+                this.addLogEntry({ level: 'error', message: `Audio error: ${audio.error?.message || 'Unknown error'} (code: ${audio.error?.code})` });
+            };
+
+            // Set the source and load
+            audio.src = audioUrl;
+            audio.load();
+
+            // Try to play after a short delay to ensure loading
+            setTimeout(async () => {
+                try {
+                    console.log('Attempting to play audio...');
+                    console.log('Audio readyState:', audio.readyState);
+                    console.log('Audio networkState:', audio.networkState);
+                    console.log('Audio duration:', audio.duration);
+                    console.log('Audio paused:', audio.paused);
+
+                    // Resume audio context if suspended (required by modern browsers)
+                    if (window.AudioContext) {
+                        const audioContext = new AudioContext();
+                        if (audioContext.state === 'suspended') {
+                            await audioContext.resume();
+                            console.log('Audio context resumed');
+                        }
+                    }
+
+                    await audio.play();
+                    console.log('Audio play() promise resolved - SOUND SHOULD BE PLAYING!');
+                    this.addLogEntry({ level: 'success', message: 'Audio playback started successfully' });
+                } catch (error) {
+                    console.error('Audio playback failed:', error);
+                    console.error('Error details:', error.message);
+                    this.addLogEntry({ level: 'error', message: `Failed to play sound: ${error.message}` });
+
+                    // Try alternative approach with fetch
+                    this.tryAlternativePlayback(soundPath);
+                }
+            }, 1000);
+
+            // Optional: Log when audio ends
+            audio.onended = () => {
+                console.log('Sound playback completed');
+            };
+
+        } catch (error) {
+            console.error('Error creating audio element:', error);
+            this.addLogEntry({ level: 'error', message: `Failed to create audio element: ${error.message}` });
+        }
+    }
+
+    async tryAlternativePlayback(soundPath) {
+        try {
+            console.log('Trying alternative playback method...');
+
+            // Try to fetch the file and create a blob URL
+            const response = await fetch(soundPath);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+
+            console.log('Created blob URL:', blobUrl);
+
+            const audio = new Audio(blobUrl);
+            audio.volume = 0.8;
+
+            audio.oncanplay = () => console.log('Blob audio can play');
+            audio.onerror = (e) => console.error('Blob audio error:', e);
+
+            await audio.play();
+            console.log('Blob audio playback started!');
+            this.addLogEntry({ level: 'success', message: 'Audio playback started via blob URL' });
+
+            // Clean up blob URL after playback
+            audio.onended = () => {
+                URL.revokeObjectURL(blobUrl);
+            };
+
+        } catch (error) {
+            console.error('Alternative playback also failed:', error);
+            this.addLogEntry({ level: 'error', message: `All audio playback methods failed: ${error.message}` });
         }
     }
 

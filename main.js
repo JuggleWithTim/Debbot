@@ -215,6 +215,15 @@ function setupIPCHandlers() {
     }
   });
 
+  ipcMain.handle('actions:test', async (event, actionId) => {
+    try {
+      await actionManager.executeAction(actionId, { test: true });
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
   // Settings handlers
   ipcMain.handle('settings:load', async () => {
     try {

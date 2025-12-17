@@ -186,6 +186,10 @@ class ActionManager {
                 await this.executeTwitchMessageStep(value);
                 break;
 
+            case 'play_sound':
+                await this.executePlaySoundStep(value);
+                break;
+
             case 'delay':
                 await this.executeDelayStep(value);
                 break;
@@ -272,6 +276,25 @@ class ActionManager {
                 level: 'success',
                 message: `Sent Twitch message: ${message}`
             });
+        }
+    }
+
+    async executePlaySoundStep(soundPath) {
+        if (!soundPath || soundPath.trim() === '') {
+            throw new Error('No sound file path specified');
+        }
+
+        // Send message to renderer process to play the sound
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('play-sound', soundPath);
+
+            // Log the action
+            global.mainWindow.webContents.send('log:message', {
+                level: 'success',
+                message: `Playing sound: ${soundPath}`
+            });
+        } else {
+            throw new Error('Main window not available for sound playback');
         }
     }
 
@@ -485,8 +508,10 @@ TWITCH_CHANNEL=${envVars.TWITCH_CHANNEL}
             errors.push('Action steps must be an array');
         } else {
             action.steps.forEach((step, index) => {
-                if (!step.type || !step.value) {
-                    errors.push(`Step ${index + 1} is missing type or value`);
+                if (!step.type) {
+                    errors.push(`Step ${index + 1} is missing type`);
+                } else if (!step.value && !['obs_start_streaming', 'obs_stop_streaming'].includes(step.type)) {
+                    errors.push(`Step ${index + 1} is missing value`);
                 }
             });
         }

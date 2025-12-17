@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createAction: (action) => ipcRenderer.invoke('actions:create', action),
   updateAction: (actionId, action) => ipcRenderer.invoke('actions:update', actionId, action),
   deleteAction: (actionId) => ipcRenderer.invoke('actions:delete', actionId),
+  testAction: (actionId) => ipcRenderer.invoke('actions:test', actionId),
 
   // Settings
   loadSettings: () => ipcRenderer.invoke('settings:load'),
@@ -39,6 +40,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   onActionTriggered: (callback) => ipcRenderer.on('action:triggered', callback),
   onLogMessage: (callback) => ipcRenderer.on('log:message', callback),
+
+  // Sound playback
+  onPlaySound: (callback) => ipcRenderer.on('play-sound', callback),
 
   // Remove all listeners (cleanup)
   removeAllListeners: (event) => ipcRenderer.removeAllListeners(event)
