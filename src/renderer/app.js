@@ -530,7 +530,7 @@ class DebbotApp {
             actionElement.className = 'action-item';
 
             const triggerText = action.trigger === 'command' ? `Command: ${action.command}` :
-                              action.trigger === 'manual' ? 'Manual trigger' : 'Timer trigger';
+                              action.trigger === 'timer' ? 'Timer trigger' : 'Unknown trigger';
 
             actionElement.innerHTML = `
                 <div class="action-info">

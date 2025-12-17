@@ -64,7 +64,7 @@ class ActionManager {
 
         // Ensure action has required fields
         action.name = action.name || 'Unnamed Action';
-        action.trigger = action.trigger || 'manual';
+        action.trigger = action.trigger || 'command';
         action.steps = action.steps || [];
 
         this.actions.push(action);
@@ -496,7 +496,7 @@ TWITCH_CHANNEL=${envVars.TWITCH_CHANNEL}
             errors.push('Action must have a valid name');
         }
 
-        if (!['command', 'manual', 'timer'].includes(action.trigger)) {
+        if (!['command', 'timer'].includes(action.trigger)) {
             errors.push('Action must have a valid trigger type');
         }
 
