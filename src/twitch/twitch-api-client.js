@@ -174,6 +174,17 @@ class TwitchAPIClient {
     }
 
     /**
+     * Reject authentication promise (called by protocol handler)
+     */
+    rejectAuthentication(error) {
+        if (this.authReject) {
+            this.authReject(error);
+            this.authResolve = null;
+            this.authReject = null;
+        }
+    }
+
+    /**
      * Handle OAuth callback and exchange code for tokens
      */
     async handleCallback(callbackUrl) {
