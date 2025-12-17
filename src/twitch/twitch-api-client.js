@@ -1,6 +1,5 @@
 const axios = require('axios');
 const express = require('express');
-const crypto = require('crypto');
 const WebSocket = require('ws');
 const { BrowserWindow } = require('electron');
 const path = require('path');
@@ -20,7 +19,6 @@ class TwitchAPIClient {
         this.channelPointPolling = null;
         this.lastRedeemId = null;
         this.eventSubSubscriptions = new Map();
-        this.webhookSecret = crypto.randomBytes(16).toString('hex');
         this.eventSubWebSocket = null;
         this.keepaliveInterval = null;
     }
@@ -165,28 +163,6 @@ class TwitchAPIClient {
     }
 
     /**
-     * Resolve authentication promise (called by protocol handler)
-     */
-    resolveAuthentication(tokens) {
-        if (this.authResolve) {
-            this.authResolve(tokens);
-            this.authResolve = null;
-            this.authReject = null;
-        }
-    }
-
-    /**
-     * Reject authentication promise (called by protocol handler)
-     */
-    rejectAuthentication(error) {
-        if (this.authReject) {
-            this.authReject(error);
-            this.authResolve = null;
-            this.authReject = null;
-        }
-    }
-
-    /**
      * Handle OAuth callback and exchange code for tokens
      */
     async handleCallback(callbackUrl) {
@@ -300,13 +276,10 @@ class TwitchAPIClient {
     }
 
     /**
-     * Subscribe to channel point redemptions
+     * Subscribe to channel point redemptions (legacy method - now uses WebSocket EventSub)
      */
     async subscribeToChannelPoints(broadcasterId) {
-        // This would set up EventSub webhooks - simplified for now
-        // In a full implementation, you'd set up webhooks for channel.channel_points_custom_reward_redemption.add
-        console.log(`Subscribing to channel points for broadcaster ${broadcasterId}`);
-        // Return subscription info
+        console.log(`Subscribing to channel points for broadcaster ${broadcasterId} via WebSocket EventSub`);
         return {
             broadcaster_id: broadcasterId,
             type: 'channel.channel_points_custom_reward_redemption.add'
