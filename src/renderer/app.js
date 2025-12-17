@@ -493,6 +493,26 @@ class DebbotApp {
         }
     }
 
+    async testAction(actionId) {
+        const action = this.actions.find(a => a.id === actionId);
+        if (!action) {
+            console.error('Action not found for testing:', actionId);
+            this.addLogEntry({ level: 'error', message: 'Action not found for testing' });
+            return;
+        }
+
+        this.addLogEntry({ level: 'info', message: `Testing action: ${action.name}` });
+
+        try {
+            // Execute the action directly without permission checks
+            await window.electronAPI.testAction(actionId);
+            this.addLogEntry({ level: 'success', message: `Test completed: ${action.name}` });
+        } catch (error) {
+            console.error('Test action error:', error);
+            this.addLogEntry({ level: 'error', message: `Test failed: ${error.message}` });
+        }
+    }
+
     renderActions() {
         const container = document.getElementById('actions-list');
         container.innerHTML = '';
@@ -515,6 +535,7 @@ class DebbotApp {
                     <div class="action-details">${triggerText} • ${action.steps.length} step${action.steps.length !== 1 ? 's' : ''}</div>
                 </div>
                 <div class="action-controls">
+                    <button class="btn btn-success" onclick="app.testAction('${action.id}')">Test</button>
                     <button class="btn btn-secondary" onclick="app.openActionModal('${action.id}')">Edit</button>
                     <button class="btn btn-danger" onclick="app.deleteAction('${action.id}')">Delete</button>
                 </div>

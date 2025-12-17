@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   createAction: (action) => ipcRenderer.invoke('actions:create', action),
   updateAction: (actionId, action) => ipcRenderer.invoke('actions:update', actionId, action),
   deleteAction: (actionId) => ipcRenderer.invoke('actions:delete', actionId),
+  testAction: (actionId) => ipcRenderer.invoke('actions:test', actionId),
 
   // Settings
   loadSettings: () => ipcRenderer.invoke('settings:load'),
