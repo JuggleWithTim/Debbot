@@ -347,6 +347,28 @@ body {
     gap: 1rem;
 }
 
+.permissions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 0.5rem;
+}
+
+.permission-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.permission-checkbox input[type="checkbox"] {
+    margin: 0;
+}
+
+.permission-checkbox span {
+    font-weight: 500;
+}
+
 /* Action Steps */
 .action-steps {
     margin-top: 0.5rem;

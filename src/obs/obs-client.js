@@ -169,6 +169,36 @@ class OBSClient {
     }
 
     // Get OBS status information
+    async startStreaming() {
+        if (!this.connected) {
+            throw new Error('OBS not connected');
+        }
+
+        try {
+            await this.obs.call('StartStreaming', {});
+            console.log('Started OBS streaming');
+            return true;
+        } catch (error) {
+            console.error('Error starting streaming:', error);
+            throw error;
+        }
+    }
+
+    async stopStreaming() {
+        if (!this.connected) {
+            throw new Error('OBS not connected');
+        }
+
+        try {
+            await this.obs.call('StopStreaming', {});
+            console.log('Stopped OBS streaming');
+            return true;
+        } catch (error) {
+            console.error('Error stopping streaming:', error);
+            throw error;
+        }
+    }
+
     async getStatus() {
         if (!this.connected) {
             return { connected: false };

@@ -1,1 +1,53 @@
-[]
+[
+  {
+    "id": "1765930385529",
+    "steps": [
+      {
+        "type": "obs_scene",
+        "value": "BRB"
+      }
+    ],
+    "name": "Test",
+    "trigger": "command",
+    "command": "!test",
+    "permissions": {
+      "viewer": true,
+      "moderator": true,
+      "broadcaster": true
+    }
+  },
+  {
+    "id": "1765930632706",
+    "steps": [
+      {
+        "type": "obs_start_streaming",
+        "value": ""
+      }
+    ],
+    "name": "StartStreaming",
+    "trigger": "command",
+    "command": "!start",
+    "permissions": {
+      "viewer": false,
+      "moderator": true,
+      "broadcaster": true
+    }
+  },
+  {
+    "id": "1765930654079",
+    "steps": [
+      {
+        "type": "obs_stop_streaming",
+        "value": ""
+      }
+    ],
+    "name": "StopStreaming",
+    "trigger": "command",
+    "command": "!stop",
+    "permissions": {
+      "viewer": false,
+      "moderator": true,
+      "broadcaster": true
+    }
+  }
+]

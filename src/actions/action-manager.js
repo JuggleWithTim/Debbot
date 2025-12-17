@@ -174,6 +174,14 @@ class ActionManager {
                 await this.executeOBSSourceStep(value);
                 break;
 
+            case 'obs_start_streaming':
+                await this.executeOBSStartStreamingStep();
+                break;
+
+            case 'obs_stop_streaming':
+                await this.executeOBSStopStreamingStep();
+                break;
+
             case 'delay':
                 await this.executeDelayStep(value);
                 break;
@@ -215,6 +223,38 @@ class ActionManager {
         }
     }
 
+    async executeOBSStartStreamingStep() {
+        if (!global.obsClient || !global.obsClient.isConnected()) {
+            throw new Error('OBS not connected');
+        }
+
+        await global.obsClient.startStreaming();
+
+        // Log the action
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('log:message', {
+                level: 'success',
+                message: 'Started OBS streaming'
+            });
+        }
+    }
+
+    async executeOBSStopStreamingStep() {
+        if (!global.obsClient || !global.obsClient.isConnected()) {
+            throw new Error('OBS not connected');
+        }
+
+        await global.obsClient.stopStreaming();
+
+        // Log the action
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('log:message', {
+                level: 'success',
+                message: 'Stopped OBS streaming'
+            });
+        }
+    }
+
     async executeDelayStep(delayMs) {
         const delay = parseInt(delayMs);
         if (isNaN(delay) || delay < 0) {
@@ -227,21 +267,49 @@ class ActionManager {
 
     // Trigger handling
     async handleCommandTrigger(commandData) {
-        const { command } = commandData;
+        const { command, isBroadcaster, isMod } = commandData;
 
         const actions = this.getActionsByCommand(command);
         if (actions.length === 0) {
             return;
         }
 
-        // Execute all matching actions
+        // Execute all matching actions that the user has permission for
         for (const action of actions) {
             try {
+                // Check permissions
+                if (!this.checkUserPermissions(action, isBroadcaster, isMod)) {
+                    console.log(`User does not have permission to execute action: ${action.name}`);
+                    continue;
+                }
+
                 await this.executeAction(action.id, commandData);
             } catch (error) {
                 console.error(`Failed to execute action ${action.name}:`, error);
             }
         }
+    }
+
+    checkUserPermissions(action, isBroadcaster, isMod) {
+        // If no permissions specified, allow all
+        if (!action.permissions) {
+            return true;
+        }
+
+        // Check user role permissions
+        if (isBroadcaster && action.permissions.broadcaster) {
+            return true;
+        }
+
+        if (isMod && action.permissions.moderator) {
+            return true;
+        }
+
+        if (!isBroadcaster && !isMod && action.permissions.viewer) {
+            return true;
+        }
+
+        return false;
     }
 
     // Settings management

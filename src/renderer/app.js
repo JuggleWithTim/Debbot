@@ -83,6 +83,13 @@ class DebbotApp {
             this.updateTriggerFields(e.target.value);
         });
 
+        // Permission checkboxes
+        ['perm-viewer', 'perm-moderator', 'perm-broadcaster'].forEach(id => {
+            document.getElementById(id).addEventListener('change', () => {
+                this.validatePermissions();
+            });
+        });
+
         // Logs
         document.getElementById('clear-logs-btn').addEventListener('click', () => this.clearLogs());
 
@@ -140,10 +147,14 @@ class DebbotApp {
 
     updateTriggerFields(triggerType) {
         const commandGroup = document.getElementById('command-group');
+        const permissionsGroup = document.getElementById('permissions-group');
+
         if (triggerType === 'command') {
             commandGroup.style.display = 'block';
+            permissionsGroup.style.display = 'block';
         } else {
             commandGroup.style.display = 'none';
+            permissionsGroup.style.display = 'none';
         }
     }
 
@@ -303,12 +314,25 @@ class DebbotApp {
             action = JSON.parse(JSON.stringify(action));
         }
 
-        this.currentAction = action || { id: Date.now().toString(), steps: [] };
+        this.currentAction = action || {
+            id: Date.now().toString(),
+            steps: [],
+            permissions: {
+                viewer: true,
+                moderator: true,
+                broadcaster: true
+            }
+        };
 
         document.getElementById('modal-title').textContent = action ? 'Edit Action' : 'Create Action';
         document.getElementById('action-name').value = action?.name || '';
         document.getElementById('action-trigger').value = action?.trigger || 'command';
         document.getElementById('action-command').value = action?.command || '';
+
+        // Set permissions
+        document.getElementById('perm-viewer').checked = this.currentAction.permissions?.viewer ?? true;
+        document.getElementById('perm-moderator').checked = this.currentAction.permissions?.moderator ?? true;
+        document.getElementById('perm-broadcaster').checked = this.currentAction.permissions?.broadcaster ?? true;
 
         this.updateTriggerFields(action?.trigger || 'command');
         this.renderActionSteps();
@@ -353,9 +377,11 @@ class DebbotApp {
                 <select class="step-type">
                     <option value="obs_scene" ${step.type === 'obs_scene' ? 'selected' : ''}>Switch OBS Scene</option>
                     <option value="obs_source" ${step.type === 'obs_source' ? 'selected' : ''}>Toggle OBS Source</option>
+                    <option value="obs_start_streaming" ${step.type === 'obs_start_streaming' ? 'selected' : ''}>Start OBS Streaming</option>
+                    <option value="obs_stop_streaming" ${step.type === 'obs_stop_streaming' ? 'selected' : ''}>Stop OBS Streaming</option>
                     <option value="delay" ${step.type === 'delay' ? 'selected' : ''}>Delay</option>
                 </select>
-                <input type="text" class="step-value" placeholder="Scene/Source name or delay (ms)" value="${step.value}">
+                <input type="text" class="step-value" placeholder="Scene/Source name or delay (ms)" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' ? 'disabled' : ''}>
                 <button class="step-remove" onclick="app.removeActionStep(${index})">×</button>
             `;
 
@@ -374,6 +400,19 @@ class DebbotApp {
         this.currentAction.name = name;
         this.currentAction.trigger = document.getElementById('action-trigger').value;
         this.currentAction.command = document.getElementById('action-command').value.trim();
+
+        // Update permissions
+        this.currentAction.permissions = {
+            viewer: document.getElementById('perm-viewer').checked,
+            moderator: document.getElementById('perm-moderator').checked,
+            broadcaster: document.getElementById('perm-broadcaster').checked
+        };
+
+        // Validate permissions
+        if (!this.validatePermissions()) {
+            alert('At least one permission must be selected');
+            return;
+        }
 
         // Update steps
         const stepElements = document.querySelectorAll('.action-step');
@@ -399,6 +438,14 @@ class DebbotApp {
             console.error('Save action error:', error);
             this.addLogEntry({ level: 'error', message: `Failed to save action: ${error.message}` });
         }
+    }
+
+    validatePermissions() {
+        const viewer = document.getElementById('perm-viewer').checked;
+        const moderator = document.getElementById('perm-moderator').checked;
+        const broadcaster = document.getElementById('perm-broadcaster').checked;
+
+        return viewer || moderator || broadcaster;
     }
 
     async deleteAction(actionId) {
