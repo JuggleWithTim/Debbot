@@ -425,11 +425,16 @@ class DebbotApp {
         try {
             if (this.actions.find(a => a.id === this.currentAction.id)) {
                 // Update existing action
-                await window.electronAPI.updateAction(this.currentAction.id, this.currentAction);
+                const updatedAction = await window.electronAPI.updateAction(this.currentAction.id, this.currentAction);
+                // Update the local actions array with the updated action
+                const index = this.actions.findIndex(a => a.id === this.currentAction.id);
+                if (index !== -1) {
+                    this.actions[index] = updatedAction;
+                }
             } else {
                 // Create new action
-                await window.electronAPI.createAction(this.currentAction);
-                this.actions.push(this.currentAction);
+                const createdAction = await window.electronAPI.createAction(this.currentAction);
+                this.actions.push(createdAction);
             }
 
             this.renderActions();
