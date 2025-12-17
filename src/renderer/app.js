@@ -350,7 +350,19 @@ class DebbotApp {
         document.getElementById('action-steps').innerHTML = '';
     }
 
+    collectCurrentStepValues() {
+        // Collect current values from all step form elements
+        const stepElements = document.querySelectorAll('.action-step');
+        this.currentAction.steps = Array.from(stepElements).map(stepElement => ({
+            type: stepElement.querySelector('.step-type').value,
+            value: stepElement.querySelector('.step-value').value.trim()
+        }));
+    }
+
     addActionStep() {
+        // First, collect current step values from the form before adding new step
+        this.collectCurrentStepValues();
+
         const step = {
             type: 'obs_scene',
             value: ''
@@ -361,6 +373,8 @@ class DebbotApp {
     }
 
     removeActionStep(index) {
+        // First collect current values, then remove the step
+        this.collectCurrentStepValues();
         this.currentAction.steps.splice(index, 1);
         this.renderActionSteps();
     }
