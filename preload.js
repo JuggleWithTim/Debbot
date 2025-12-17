@@ -16,6 +16,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   disconnectTwitch: () => ipcRenderer.invoke('twitch:disconnect'),
   sendTwitchMessage: (message) => ipcRenderer.invoke('twitch:sendMessage', message),
 
+  // Twitch API functions
+  authenticateTwitchAPI: () => ipcRenderer.invoke('twitchapi:authenticate'),
+  logoutTwitchAPI: () => ipcRenderer.invoke('twitchapi:logout'),
+  getTwitchAPIStatus: () => ipcRenderer.invoke('twitchapi:getStatus'),
+  getCustomRewards: (broadcasterId) => ipcRenderer.invoke('twitchapi:getCustomRewards', broadcasterId),
+
   // Action management
   loadActions: () => ipcRenderer.invoke('actions:load'),
   saveActions: (actions) => ipcRenderer.invoke('actions:save', actions),
@@ -23,6 +29,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   updateAction: (actionId, action) => ipcRenderer.invoke('actions:update', actionId, action),
   deleteAction: (actionId) => ipcRenderer.invoke('actions:delete', actionId),
   testAction: (actionId) => ipcRenderer.invoke('actions:test', actionId),
+  triggerChannelPoint: (channelPointData) => ipcRenderer.invoke('actions:triggerChannelPoint', channelPointData),
 
   // Settings
   loadSettings: () => ipcRenderer.invoke('settings:load'),
@@ -37,6 +44,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTwitchDisconnected: (callback) => ipcRenderer.on('twitch:disconnected', callback),
   onTwitchMessage: (callback) => ipcRenderer.on('twitch:message', callback),
   onTwitchCommand: (callback) => ipcRenderer.on('twitch:command', callback),
+
+  onTwitchAPIAuthenticated: (callback) => ipcRenderer.on('twitchapi:authenticated', callback),
+  onTwitchAPILoggedOut: (callback) => ipcRenderer.on('twitchapi:loggedout', callback),
+
+  onChannelPointRedeem: (callback) => ipcRenderer.on('channel_point_redeem', callback),
 
   onActionTriggered: (callback) => ipcRenderer.on('action:triggered', callback),
   onLogMessage: (callback) => ipcRenderer.on('log:message', callback),

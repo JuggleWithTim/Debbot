@@ -84,6 +84,25 @@
                 </div>
 
                 <div class="settings-section">
+                    <h3>Twitch API (Broadcaster)</h3>
+                    <p class="settings-description">Authenticate as the broadcaster to enable channel point redeem triggers.</p>
+                    <div class="auth-status">
+                        <div class="status-item">
+                            <span class="status-label">API Status:</span>
+                            <span id="twitch-api-status" class="status disconnected">Not Authenticated</span>
+                        </div>
+                        <div id="broadcaster-info" class="broadcaster-info" style="display: none;">
+                            <span class="status-label">Broadcaster:</span>
+                            <span id="broadcaster-name"></span>
+                        </div>
+                    </div>
+                    <div class="settings-buttons">
+                        <button id="twitch-api-login-btn" class="btn btn-primary">Login as Broadcaster</button>
+                        <button id="twitch-api-logout-btn" class="btn btn-danger" disabled>Logout</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
                     <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
                 </div>
             </div>
@@ -118,11 +137,19 @@
                     <select id="action-trigger">
                         <option value="command">Chat Command</option>
                         <option value="timer">Timer</option>
+                        <option value="channel_points">Channel Point Redeem</option>
                     </select>
                 </div>
                 <div class="form-group" id="command-group">
                     <label for="action-command">Command:</label>
                     <input type="text" id="action-command" placeholder="!command">
+                </div>
+                <div class="form-group" id="channel-points-group" style="display: none;">
+                    <label for="action-reward">Channel Point Reward:</label>
+                    <select id="action-reward">
+                        <option value="">Select a reward...</option>
+                        <!-- Rewards will be populated dynamically -->
+                    </select>
                 </div>
                 <div class="form-group" id="permissions-group">
                     <label>Permissions:</label>
