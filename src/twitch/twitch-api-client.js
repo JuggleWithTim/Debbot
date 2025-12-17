@@ -163,6 +163,17 @@ class TwitchAPIClient {
     }
 
     /**
+     * Resolve authentication promise (called by protocol handler)
+     */
+    resolveAuthentication(tokens) {
+        if (this.authResolve) {
+            this.authResolve(tokens);
+            this.authResolve = null;
+            this.authReject = null;
+        }
+    }
+
+    /**
      * Handle OAuth callback and exchange code for tokens
      */
     async handleCallback(callbackUrl) {
