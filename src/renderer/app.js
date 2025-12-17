@@ -110,6 +110,14 @@ class DebbotApp {
             window.electronAPI.onActionTriggered((event, action) => this.onActionTriggered(action));
             window.electronAPI.onLogMessage((event, log) => this.addLogEntry(log));
         }
+
+        // IPC event listener for playing sounds
+        if (window.require) {
+            const { ipcRenderer } = window.require('electron');
+            ipcRenderer.on('play-sound', (event, soundPath) => {
+                this.playSound(soundPath);
+            });
+        }
     }
 
     async loadInitialData() {
@@ -394,9 +402,10 @@ class DebbotApp {
                     <option value="obs_start_streaming" ${step.type === 'obs_start_streaming' ? 'selected' : ''}>Start OBS Streaming</option>
                     <option value="obs_stop_streaming" ${step.type === 'obs_stop_streaming' ? 'selected' : ''}>Stop OBS Streaming</option>
                     <option value="twitch_message" ${step.type === 'twitch_message' ? 'selected' : ''}>Send Twitch Message</option>
+                    <option value="play_sound" ${step.type === 'play_sound' ? 'selected' : ''}>Play Sound</option>
                     <option value="delay" ${step.type === 'delay' ? 'selected' : ''}>Delay</option>
                 </select>
-                <input type="text" class="step-value" placeholder="Scene/Source name, message, or delay (ms)" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' ? 'disabled' : ''}>
+                <input type="text" class="step-value" placeholder="${step.type === 'play_sound' ? 'Path to audio file' : step.type === 'delay' ? 'Delay in milliseconds' : step.type === 'twitch_message' ? 'Message to send' : 'Scene/Source name'}" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' ? 'disabled' : ''}>
                 <button class="step-remove" onclick="app.removeActionStep(${index})">×</button>
             `;
 
@@ -589,6 +598,65 @@ class DebbotApp {
             }
         } else {
             this.addLogEntry({ level: 'warn', message: 'Twitch settings incomplete - skipping auto-connect' });
+        }
+    }
+
+    playSound(soundPath) {
+        try {
+            console.log('Playing sound from renderer:', soundPath);
+
+            // For local files, try using file:// protocol
+            let audioUrl = soundPath;
+            if (!soundPath.startsWith('http') && !soundPath.startsWith('file://')) {
+                // Convert local path to file:// URL
+                audioUrl = `file://${soundPath}`;
+            }
+
+            console.log('Using audio URL:', audioUrl);
+
+            // Create audio element and play the sound
+            const audio = new Audio();
+            audio.volume = 0.8; // Set reasonable default volume
+
+            // Add event listeners for debugging
+            audio.onloadstart = () => console.log('Audio load started');
+            audio.oncanplay = () => console.log('Audio can play');
+            audio.onloadeddata = () => console.log('Audio data loaded');
+            audio.onerror = (e) => {
+                console.error('Audio error event:', e);
+                console.error('Audio error code:', audio.error?.code);
+                console.error('Audio error message:', audio.error?.message);
+                this.addLogEntry({ level: 'error', message: `Audio error: ${audio.error?.message || 'Unknown error'}` });
+            };
+
+            // Set the source and play
+            audio.src = audioUrl;
+
+            // Play the sound
+            audio.play().then(() => {
+                console.log('Audio play() promise resolved');
+            }).catch(error => {
+                console.error('Audio playback failed:', error);
+                this.addLogEntry({ level: 'error', message: `Failed to play sound: ${error.message}` });
+            });
+
+            // Optional: Log when audio ends
+            audio.onended = () => {
+                console.log('Sound playback completed');
+            };
+
+            // Fallback: try the original path if file:// fails
+            setTimeout(() => {
+                if (audio.readyState === 0 && audioUrl !== soundPath) {
+                    console.log('Retrying with original path...');
+                    audio.src = soundPath;
+                    audio.load();
+                }
+            }, 2000);
+
+        } catch (error) {
+            console.error('Error creating audio element:', error);
+            this.addLogEntry({ level: 'error', message: `Failed to create audio element: ${error.message}` });
         }
     }
 
