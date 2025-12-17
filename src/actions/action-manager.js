@@ -182,6 +182,10 @@ class ActionManager {
                 await this.executeOBSStopStreamingStep();
                 break;
 
+            case 'twitch_message':
+                await this.executeTwitchMessageStep(value);
+                break;
+
             case 'delay':
                 await this.executeDelayStep(value);
                 break;
@@ -251,6 +255,22 @@ class ActionManager {
             global.mainWindow.webContents.send('log:message', {
                 level: 'success',
                 message: 'Stopped OBS streaming'
+            });
+        }
+    }
+
+    async executeTwitchMessageStep(message) {
+        if (!global.twitchClient || !global.twitchClient.isConnected()) {
+            throw new Error('Twitch not connected');
+        }
+
+        await global.twitchClient.sendMessage(message);
+
+        // Log the action
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('log:message', {
+                level: 'success',
+                message: `Sent Twitch message: ${message}`
             });
         }
     }

@@ -379,9 +379,10 @@ class DebbotApp {
                     <option value="obs_source" ${step.type === 'obs_source' ? 'selected' : ''}>Toggle OBS Source</option>
                     <option value="obs_start_streaming" ${step.type === 'obs_start_streaming' ? 'selected' : ''}>Start OBS Streaming</option>
                     <option value="obs_stop_streaming" ${step.type === 'obs_stop_streaming' ? 'selected' : ''}>Stop OBS Streaming</option>
+                    <option value="twitch_message" ${step.type === 'twitch_message' ? 'selected' : ''}>Send Twitch Message</option>
                     <option value="delay" ${step.type === 'delay' ? 'selected' : ''}>Delay</option>
                 </select>
-                <input type="text" class="step-value" placeholder="Scene/Source name or delay (ms)" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' ? 'disabled' : ''}>
+                <input type="text" class="step-value" placeholder="Scene/Source name, message, or delay (ms)" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' ? 'disabled' : ''}>
                 <button class="step-remove" onclick="app.removeActionStep(${index})">×</button>
             `;
 
