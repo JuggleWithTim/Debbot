@@ -295,6 +295,24 @@ function setupIPCHandlers() {
     }
   });
 
+  ipcMain.handle('actions:triggerCheer', async (event, cheerData) => {
+    try {
+      await actionManager.handleCheerTrigger(cheerData);
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('actions:triggerSubscriber', async (event, subscriberData) => {
+    try {
+      await actionManager.handleSubscriberTrigger(subscriberData);
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
   // Settings handlers
   ipcMain.handle('settings:load', async () => {
     try {

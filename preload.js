@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteAction: (actionId) => ipcRenderer.invoke('actions:delete', actionId),
   testAction: (actionId) => ipcRenderer.invoke('actions:test', actionId),
   triggerChannelPoint: (channelPointData) => ipcRenderer.invoke('actions:triggerChannelPoint', channelPointData),
+  triggerCheer: (cheerData) => ipcRenderer.invoke('actions:triggerCheer', cheerData),
+  triggerSubscriber: (subscriberData) => ipcRenderer.invoke('actions:triggerSubscriber', subscriberData),
 
   // Settings
   loadSettings: () => ipcRenderer.invoke('settings:load'),
@@ -49,6 +51,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onTwitchAPILoggedOut: (callback) => ipcRenderer.on('twitchapi:loggedout', callback),
 
   onChannelPointRedeem: (callback) => ipcRenderer.on('channel_point_redeem', callback),
+  onCheer: (callback) => ipcRenderer.on('cheer', callback),
+  onSubscriber: (callback) => ipcRenderer.on('subscriber', callback),
 
   onActionTriggered: (callback) => ipcRenderer.on('action:triggered', callback),
   onLogMessage: (callback) => ipcRenderer.on('log:message', callback),

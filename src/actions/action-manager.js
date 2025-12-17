@@ -398,6 +398,57 @@ class ActionManager {
         });
     }
 
+    // Cheer trigger handling
+    async handleCheerTrigger(cheerData) {
+        const { userName, userId, message, bits, isAnonymous } = cheerData;
+
+        const actions = this.getActionsByTrigger('cheer');
+        if (actions.length === 0) {
+            return;
+        }
+
+        console.log(`Cheer received: ${bits} bits from ${userName || 'Anonymous'}`);
+
+        // Execute all cheer actions
+        for (const action of actions) {
+            try {
+                await this.executeAction(action.id, cheerData);
+            } catch (error) {
+                console.error(`Failed to execute cheer action ${action.name}:`, error);
+            }
+        }
+    }
+
+    // Subscriber trigger handling
+    async handleSubscriberTrigger(subscriberData) {
+        const { userName, userId, tier, isGift, gifterName, gifterId, cumulativeMonths, streakMonths } = subscriberData;
+
+        const actions = this.getActionsByTrigger('subscriber');
+        if (actions.length === 0) {
+            return;
+        }
+
+        let message = '';
+        if (isGift) {
+            message = `${userName} received a gifted subscription from ${gifterName}`;
+        } else if (cumulativeMonths > 1) {
+            message = `${userName} resubscribed for ${cumulativeMonths} months`;
+        } else {
+            message = `${userName} subscribed`;
+        }
+
+        console.log(`Subscriber event: ${message}`);
+
+        // Execute all subscriber actions
+        for (const action of actions) {
+            try {
+                await this.executeAction(action.id, subscriberData);
+            } catch (error) {
+                console.error(`Failed to execute subscriber action ${action.name}:`, error);
+            }
+        }
+    }
+
     // Settings management
     async loadSettings() {
         let savedSettings = {};
@@ -543,7 +594,7 @@ TWITCH_CLIENT_SECRET=${envVars.TWITCH_CLIENT_SECRET || 'your_client_secret_here'
             errors.push('Action must have a valid name');
         }
 
-        if (!['command', 'timer', 'channel_points'].includes(action.trigger)) {
+        if (!['command', 'timer', 'channel_points', 'cheer', 'subscriber'].includes(action.trigger)) {
             errors.push('Action must have a valid trigger type');
         }
 

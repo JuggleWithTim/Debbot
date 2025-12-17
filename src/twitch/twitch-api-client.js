@@ -31,7 +31,7 @@ class TwitchAPIClient {
             `client_id=${this.clientId}&` +
             `redirect_uri=${encodeURIComponent(this.redirectUri)}&` +
             `response_type=code&` +
-            `scope=${encodeURIComponent('channel:read:redemptions channel:manage:redemptions')}`;
+            `scope=${encodeURIComponent('channel:read:redemptions channel:manage:redemptions bits:read channel:read:subscriptions')}`;
 
         return new Promise(async (resolve, reject) => {
             try {
@@ -530,8 +530,10 @@ class TwitchAPIClient {
             // Keepalive is handled automatically by the WebSocket ping/pong
         }, 30000);
 
-        // Subscribe to channel point redemptions
+        // Subscribe to all event types
         this.subscribeToChannelPointRedemptions(session.id);
+        this.subscribeToCheers(session.id);
+        this.subscribeToSubscribers(session.id);
     }
 
     /**
@@ -575,6 +577,86 @@ class TwitchAPIClient {
     }
 
     /**
+     * Subscribe to cheer events via WebSocket
+     */
+    async subscribeToCheers(sessionId) {
+        if (!this.isAuthenticated() || !this.tokens.user) {
+            console.log('Cannot subscribe to cheer EventSub - not authenticated');
+            return;
+        }
+
+        try {
+            const subscriptionData = {
+                type: 'channel.cheer',
+                version: '1',
+                condition: {
+                    broadcaster_user_id: this.tokens.user.id
+                },
+                transport: {
+                    method: 'websocket',
+                    session_id: sessionId
+                }
+            };
+
+            const response = await this.apiCall(
+                'https://api.twitch.tv/helix/eventsub/subscriptions',
+                {
+                    method: 'POST',
+                    data: subscriptionData
+                }
+            );
+
+            const subscription = response.data.data[0];
+            this.eventSubSubscriptions.set(subscription.id, subscription);
+
+            console.log('Successfully subscribed to cheer events via WebSocket');
+
+        } catch (error) {
+            console.error('Failed to subscribe to cheer EventSub via WebSocket:', error);
+        }
+    }
+
+    /**
+     * Subscribe to subscriber events via WebSocket
+     */
+    async subscribeToSubscribers(sessionId) {
+        if (!this.isAuthenticated() || !this.tokens.user) {
+            console.log('Cannot subscribe to subscriber EventSub - not authenticated');
+            return;
+        }
+
+        try {
+            const subscriptionData = {
+                type: 'channel.subscribe',
+                version: '1',
+                condition: {
+                    broadcaster_user_id: this.tokens.user.id
+                },
+                transport: {
+                    method: 'websocket',
+                    session_id: sessionId
+                }
+            };
+
+            const response = await this.apiCall(
+                'https://api.twitch.tv/helix/eventsub/subscriptions',
+                {
+                    method: 'POST',
+                    data: subscriptionData
+                }
+            );
+
+            const subscription = response.data.data[0];
+            this.eventSubSubscriptions.set(subscription.id, subscription);
+
+            console.log('Successfully subscribed to subscriber events via WebSocket');
+
+        } catch (error) {
+            console.error('Failed to subscribe to subscriber EventSub via WebSocket:', error);
+        }
+    }
+
+    /**
      * Handle EventSub notification
      */
     handleEventSubNotification(notification) {
@@ -583,6 +665,12 @@ class TwitchAPIClient {
         switch (subscription.type) {
             case 'channel.channel_points_custom_reward_redemption.add':
                 this.handleChannelPointRedemption(event);
+                break;
+            case 'channel.cheer':
+                this.handleCheer(event);
+                break;
+            case 'channel.subscribe':
+                this.handleSubscriber(event);
                 break;
             default:
                 console.log('Unhandled EventSub notification type:', subscription.type);
@@ -605,6 +693,47 @@ class TwitchAPIClient {
                 userId: event.user_id,
                 userInput: event.user_input,
                 redeemedAt: event.redeemed_at
+            });
+        }
+    }
+
+    /**
+     * Handle cheer event
+     */
+    handleCheer(event) {
+        console.log('Cheer received via EventSub:', event.bits, 'bits from', event.user_name || 'Anonymous');
+
+        // Trigger actions for this cheer
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('cheer', {
+                userName: event.user_name,
+                userId: event.user_id,
+                message: event.message,
+                bits: event.bits,
+                isAnonymous: event.is_anonymous,
+                cheeredAt: event.cheered_at
+            });
+        }
+    }
+
+    /**
+     * Handle subscriber event
+     */
+    handleSubscriber(event) {
+        console.log('Subscriber event via EventSub:', event.user_name, 'subscribed');
+
+        // Trigger actions for this subscription
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('subscriber', {
+                userName: event.user_name,
+                userId: event.user_id,
+                tier: event.tier,
+                isGift: event.is_gift,
+                gifterName: event.gifter_name,
+                gifterId: event.gifter_id,
+                cumulativeMonths: event.cumulative_months,
+                streakMonths: event.streak_months,
+                subscribedAt: event.subscribed_at
             });
         }
     }

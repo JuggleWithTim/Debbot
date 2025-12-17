@@ -119,6 +119,12 @@ class DebbotApp {
 
             // Listen for channel point redeems
             window.electronAPI.onChannelPointRedeem((event, redeemData) => this.onChannelPointRedeem(redeemData));
+
+            // Listen for cheers
+            window.electronAPI.onCheer((event, cheerData) => this.onCheer(cheerData));
+
+            // Listen for subscribers
+            window.electronAPI.onSubscriber((event, subscriberData) => this.onSubscriber(subscriberData));
         }
 
         // IPC event listener for playing sounds
@@ -570,6 +576,10 @@ class DebbotApp {
                 triggerText = `Channel Points: ${action.reward || 'Any reward'}`;
             } else if (action.trigger === 'timer') {
                 triggerText = 'Timer trigger';
+            } else if (action.trigger === 'cheer') {
+                triggerText = 'Cheer (Bits)';
+            } else if (action.trigger === 'subscriber') {
+                triggerText = 'Subscriber';
             } else {
                 triggerText = 'Unknown trigger';
             }
@@ -857,6 +867,53 @@ class DebbotApp {
             this.addLogEntry({
                 level: 'error',
                 message: `Failed to process channel point redeem: ${error.message}`
+            });
+        }
+    }
+
+    async onCheer(cheerData) {
+        console.log('Cheer received:', cheerData);
+
+        // Trigger the action through the backend
+        try {
+            await window.electronAPI.triggerCheer(cheerData);
+            const userDisplay = cheerData.isAnonymous ? 'Anonymous' : cheerData.userName;
+            this.addLogEntry({
+                level: 'success',
+                message: `${userDisplay} cheered ${cheerData.bits} bits`
+            });
+        } catch (error) {
+            console.error('Failed to trigger cheer action:', error);
+            this.addLogEntry({
+                level: 'error',
+                message: `Failed to process cheer: ${error.message}`
+            });
+        }
+    }
+
+    async onSubscriber(subscriberData) {
+        console.log('Subscriber event received:', subscriberData);
+
+        // Trigger the action through the backend
+        try {
+            await window.electronAPI.triggerSubscriber(subscriberData);
+            let message = '';
+            if (subscriberData.isGift) {
+                message = `${subscriberData.userName} received a gifted subscription from ${subscriberData.gifterName}`;
+            } else if (subscriberData.cumulativeMonths > 1) {
+                message = `${subscriberData.userName} resubscribed for ${subscriberData.cumulativeMonths} months`;
+            } else {
+                message = `${subscriberData.userName} subscribed`;
+            }
+            this.addLogEntry({
+                level: 'success',
+                message: message
+            });
+        } catch (error) {
+            console.error('Failed to trigger subscriber action:', error);
+            this.addLogEntry({
+                level: 'error',
+                message: `Failed to process subscriber event: ${error.message}`
             });
         }
     }
