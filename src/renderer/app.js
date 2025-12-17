@@ -112,11 +112,14 @@ class DebbotApp {
         }
 
         // IPC event listener for playing sounds
-        if (window.require) {
-            const { ipcRenderer } = window.require('electron');
-            ipcRenderer.on('play-sound', (event, soundPath) => {
+        if (window.electronAPI && window.electronAPI.onPlaySound) {
+            window.electronAPI.onPlaySound((event, soundPath) => {
+                console.log('Received play-sound IPC event:', soundPath);
                 this.playSound(soundPath);
             });
+            console.log('IPC event listener for play-sound registered via electronAPI');
+        } else {
+            console.error('electronAPI.onPlaySound not available');
         }
     }
 
@@ -625,6 +628,7 @@ class DebbotApp {
     playSound(soundPath) {
         try {
             console.log('Playing sound from renderer:', soundPath);
+            console.log('Audio context state:', window.AudioContext ? new AudioContext().state : 'No AudioContext');
 
             // For local files, try using file:// protocol
             let audioUrl = soundPath;
@@ -638,46 +642,106 @@ class DebbotApp {
             // Create audio element and play the sound
             const audio = new Audio();
             audio.volume = 0.8; // Set reasonable default volume
+            audio.crossOrigin = 'anonymous'; // Try to avoid CORS issues
 
-            // Add event listeners for debugging
+            // Add comprehensive event listeners for debugging
             audio.onloadstart = () => console.log('Audio load started');
             audio.oncanplay = () => console.log('Audio can play');
             audio.onloadeddata = () => console.log('Audio data loaded');
+            audio.onloadedmetadata = () => console.log('Audio metadata loaded');
+            audio.onprogress = () => console.log('Audio loading progress');
+            audio.onstalled = () => console.log('Audio stalled');
+            audio.onsuspend = () => console.log('Audio suspended');
+            audio.onabort = () => console.log('Audio aborted');
+
             audio.onerror = (e) => {
                 console.error('Audio error event:', e);
                 console.error('Audio error code:', audio.error?.code);
                 console.error('Audio error message:', audio.error?.message);
-                this.addLogEntry({ level: 'error', message: `Audio error: ${audio.error?.message || 'Unknown error'}` });
+                console.error('Audio network state:', audio.networkState);
+                console.error('Audio ready state:', audio.readyState);
+                this.addLogEntry({ level: 'error', message: `Audio error: ${audio.error?.message || 'Unknown error'} (code: ${audio.error?.code})` });
             };
 
-            // Set the source and play
+            // Set the source and load
             audio.src = audioUrl;
+            audio.load();
 
-            // Play the sound
-            audio.play().then(() => {
-                console.log('Audio play() promise resolved');
-            }).catch(error => {
-                console.error('Audio playback failed:', error);
-                this.addLogEntry({ level: 'error', message: `Failed to play sound: ${error.message}` });
-            });
+            // Try to play after a short delay to ensure loading
+            setTimeout(async () => {
+                try {
+                    console.log('Attempting to play audio...');
+                    console.log('Audio readyState:', audio.readyState);
+                    console.log('Audio networkState:', audio.networkState);
+                    console.log('Audio duration:', audio.duration);
+                    console.log('Audio paused:', audio.paused);
+
+                    // Resume audio context if suspended (required by modern browsers)
+                    if (window.AudioContext) {
+                        const audioContext = new AudioContext();
+                        if (audioContext.state === 'suspended') {
+                            await audioContext.resume();
+                            console.log('Audio context resumed');
+                        }
+                    }
+
+                    await audio.play();
+                    console.log('Audio play() promise resolved - SOUND SHOULD BE PLAYING!');
+                    this.addLogEntry({ level: 'success', message: 'Audio playback started successfully' });
+                } catch (error) {
+                    console.error('Audio playback failed:', error);
+                    console.error('Error details:', error.message);
+                    this.addLogEntry({ level: 'error', message: `Failed to play sound: ${error.message}` });
+
+                    // Try alternative approach with fetch
+                    this.tryAlternativePlayback(soundPath);
+                }
+            }, 1000);
 
             // Optional: Log when audio ends
             audio.onended = () => {
                 console.log('Sound playback completed');
             };
 
-            // Fallback: try the original path if file:// fails
-            setTimeout(() => {
-                if (audio.readyState === 0 && audioUrl !== soundPath) {
-                    console.log('Retrying with original path...');
-                    audio.src = soundPath;
-                    audio.load();
-                }
-            }, 2000);
-
         } catch (error) {
             console.error('Error creating audio element:', error);
             this.addLogEntry({ level: 'error', message: `Failed to create audio element: ${error.message}` });
+        }
+    }
+
+    async tryAlternativePlayback(soundPath) {
+        try {
+            console.log('Trying alternative playback method...');
+
+            // Try to fetch the file and create a blob URL
+            const response = await fetch(soundPath);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+
+            console.log('Created blob URL:', blobUrl);
+
+            const audio = new Audio(blobUrl);
+            audio.volume = 0.8;
+
+            audio.oncanplay = () => console.log('Blob audio can play');
+            audio.onerror = (e) => console.error('Blob audio error:', e);
+
+            await audio.play();
+            console.log('Blob audio playback started!');
+            this.addLogEntry({ level: 'success', message: 'Audio playback started via blob URL' });
+
+            // Clean up blob URL after playback
+            audio.onended = () => {
+                URL.revokeObjectURL(blobUrl);
+            };
+
+        } catch (error) {
+            console.error('Alternative playback also failed:', error);
+            this.addLogEntry({ level: 'error', message: `All audio playback methods failed: ${error.message}` });
         }
     }
 

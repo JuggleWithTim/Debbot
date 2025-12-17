@@ -41,6 +41,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onActionTriggered: (callback) => ipcRenderer.on('action:triggered', callback),
   onLogMessage: (callback) => ipcRenderer.on('log:message', callback),
 
+  // Sound playback
+  onPlaySound: (callback) => ipcRenderer.on('play-sound', callback),
+
   // Remove all listeners (cleanup)
   removeAllListeners: (event) => ipcRenderer.removeAllListeners(event)
 });
