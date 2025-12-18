@@ -8,12 +8,14 @@ require('dotenv').config();
 // Import our custom modules
 const OBSClient = require('./src/obs/obs-client');
 const TwitchClient = require('./src/twitch/twitch-client');
+const TwitchAPIClient = require('./src/twitch/twitch-api-client');
 const ActionManager = require('./src/actions/action-manager');
 
 // Keep a global reference of the window object and services
 let mainWindow;
 let obsClient;
 let twitchClient;
+let twitchAPIClient;
 let actionManager;
 
 // Create the main application window
@@ -54,7 +56,7 @@ function createWindow() {
 }
 
 // Initialize services
-function initializeServices() {
+async function initializeServices() {
   // Make mainWindow available globally for services
   global.mainWindow = mainWindow;
 
@@ -65,6 +67,18 @@ function initializeServices() {
   // Initialize Twitch client
   twitchClient = new TwitchClient();
   global.twitchClient = twitchClient;
+
+  // Initialize Twitch API client
+  twitchAPIClient = new TwitchAPIClient();
+  global.twitchAPIClient = twitchAPIClient;
+
+  // Load saved tokens
+  const tokensLoaded = await twitchAPIClient.loadTokens(path.join(__dirname, 'data', 'twitch-tokens.json'));
+
+  // Start EventSub if tokens were loaded
+  if (tokensLoaded && twitchAPIClient.isAuthenticated()) {
+    twitchAPIClient.startEventSub();
+  }
 
   // Initialize action manager
   actionManager = new ActionManager();
@@ -170,6 +184,54 @@ function setupIPCHandlers() {
     }
   });
 
+  // Twitch API handlers
+  ipcMain.handle('twitchapi:authenticate', async () => {
+    try {
+      const tokens = await twitchAPIClient.authenticate();
+      // Start EventSub system (falls back to polling for development)
+      twitchAPIClient.startEventSub();
+      mainWindow.webContents.send('twitchapi:authenticated', { user: tokens.user });
+      return { success: true, user: tokens.user };
+    } catch (error) {
+      mainWindow.webContents.send('log:message', {
+        level: 'error',
+        message: `Twitch API authentication failed: ${error.message}`
+      });
+      throw error;
+    }
+  });
+
+  ipcMain.handle('twitchapi:logout', async () => {
+    try {
+      // Stop EventSub system
+      await twitchAPIClient.stopEventSub();
+      twitchAPIClient.logout();
+      mainWindow.webContents.send('twitchapi:loggedout');
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('twitchapi:getStatus', async () => {
+    try {
+      const isAuthenticated = twitchAPIClient.isAuthenticated();
+      const user = isAuthenticated ? twitchAPIClient.getUser() : null;
+      return { authenticated: isAuthenticated, user };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('twitchapi:getCustomRewards', async (event, broadcasterId) => {
+    try {
+      const rewards = await twitchAPIClient.getCustomRewards(broadcasterId);
+      return rewards;
+    } catch (error) {
+      throw error;
+    }
+  });
+
   // Action handlers
   ipcMain.handle('actions:load', async () => {
     try {
@@ -224,6 +286,33 @@ function setupIPCHandlers() {
     }
   });
 
+  ipcMain.handle('actions:triggerChannelPoint', async (event, channelPointData) => {
+    try {
+      await actionManager.handleChannelPointTrigger(channelPointData);
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('actions:triggerCheer', async (event, cheerData) => {
+    try {
+      await actionManager.handleCheerTrigger(cheerData);
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('actions:triggerSubscriber', async (event, subscriberData) => {
+    try {
+      await actionManager.handleSubscriberTrigger(subscriberData);
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
   // Settings handlers
   ipcMain.handle('settings:load', async () => {
     try {
@@ -244,6 +333,8 @@ function setupIPCHandlers() {
 
 
 }
+
+
 
 // App event handlers
 app.whenReady().then(() => {

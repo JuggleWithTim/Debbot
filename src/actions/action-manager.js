@@ -64,7 +64,7 @@ class ActionManager {
 
         // Ensure action has required fields
         action.name = action.name || 'Unnamed Action';
-        action.trigger = action.trigger || 'manual';
+        action.trigger = action.trigger || 'command';
         action.steps = action.steps || [];
 
         this.actions.push(action);
@@ -355,6 +355,100 @@ class ActionManager {
         return false;
     }
 
+    // Channel Point trigger handling
+    async handleChannelPointTrigger(channelPointData) {
+        const { rewardId, rewardTitle, userName, userId, anyReward } = channelPointData;
+
+        // Get actions that match this redeem
+        let actions = [];
+
+        if (anyReward) {
+            // This redeem came from sampling manageable rewards for "any reward" actions
+            actions = this.getActionsByChannelPoints(''); // Empty string = any reward
+        } else {
+            // This is a specific reward redeem
+            actions = this.getActionsByChannelPoints(rewardId);
+        }
+
+        if (actions.length === 0) {
+            return;
+        }
+
+        console.log(`Channel point redeemed: ${rewardTitle} by ${userName}`);
+
+        // Execute all matching actions
+        for (const action of actions) {
+            try {
+                await this.executeAction(action.id, channelPointData);
+            } catch (error) {
+                console.error(`Failed to execute channel point action ${action.name}:`, error);
+            }
+        }
+    }
+
+    getActionsByChannelPoints(rewardId) {
+        return this.actions.filter(a => {
+            if (a.trigger !== 'channel_points') return false;
+
+            // If no specific reward is set, trigger on any reward
+            if (!a.reward) return true;
+
+            // Otherwise, match the specific reward ID
+            return a.reward === rewardId;
+        });
+    }
+
+    // Cheer trigger handling
+    async handleCheerTrigger(cheerData) {
+        const { userName, userId, message, bits, isAnonymous } = cheerData;
+
+        const actions = this.getActionsByTrigger('cheer');
+        if (actions.length === 0) {
+            return;
+        }
+
+        console.log(`Cheer received: ${bits} bits from ${userName || 'Anonymous'}`);
+
+        // Execute all cheer actions
+        for (const action of actions) {
+            try {
+                await this.executeAction(action.id, cheerData);
+            } catch (error) {
+                console.error(`Failed to execute cheer action ${action.name}:`, error);
+            }
+        }
+    }
+
+    // Subscriber trigger handling
+    async handleSubscriberTrigger(subscriberData) {
+        const { userName, userId, tier, isGift, gifterName, gifterId, cumulativeMonths, streakMonths } = subscriberData;
+
+        const actions = this.getActionsByTrigger('subscriber');
+        if (actions.length === 0) {
+            return;
+        }
+
+        let message = '';
+        if (isGift) {
+            message = `${userName} received a gifted subscription from ${gifterName}`;
+        } else if (cumulativeMonths > 1) {
+            message = `${userName} resubscribed for ${cumulativeMonths} months`;
+        } else {
+            message = `${userName} subscribed`;
+        }
+
+        console.log(`Subscriber event: ${message}`);
+
+        // Execute all subscriber actions
+        for (const action of actions) {
+            try {
+                await this.executeAction(action.id, subscriberData);
+            } catch (error) {
+                console.error(`Failed to execute subscriber action ${action.name}:`, error);
+            }
+        }
+    }
+
     // Settings management
     async loadSettings() {
         let savedSettings = {};
@@ -450,7 +544,7 @@ class ActionManager {
                 envVars.TWITCH_CHANNEL = settings.twitch.channel || '';
             }
 
-            // Generate new .env content
+            // Generate new .env content, preserving Twitch API credentials
             const newEnvContent = `# OBS WebSocket Settings
 OBS_HOST=${envVars.OBS_HOST}
 OBS_PORT=${envVars.OBS_PORT}
@@ -460,6 +554,10 @@ OBS_PASSWORD=${envVars.OBS_PASSWORD}
 TWITCH_USERNAME=${envVars.TWITCH_USERNAME}
 TWITCH_OAUTH_TOKEN=${envVars.TWITCH_OAUTH_TOKEN}
 TWITCH_CHANNEL=${envVars.TWITCH_CHANNEL}
+
+# Twitch API Configuration
+TWITCH_CLIENT_ID=${envVars.TWITCH_CLIENT_ID || 'your_client_id_here'}
+TWITCH_CLIENT_SECRET=${envVars.TWITCH_CLIENT_SECRET || 'your_client_secret_here'}
 `;
 
             // Write back to .env file
@@ -496,7 +594,7 @@ TWITCH_CHANNEL=${envVars.TWITCH_CHANNEL}
             errors.push('Action must have a valid name');
         }
 
-        if (!['command', 'manual', 'timer'].includes(action.trigger)) {
+        if (!['command', 'timer', 'channel_points', 'cheer', 'subscriber'].includes(action.trigger)) {
             errors.push('Action must have a valid trigger type');
         }
 

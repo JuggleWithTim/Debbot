@@ -96,6 +96,10 @@ class DebbotApp {
         // Settings
         document.getElementById('save-settings-btn').addEventListener('click', () => this.saveSettings());
 
+        // Twitch API
+        document.getElementById('twitch-api-login-btn').addEventListener('click', () => this.authenticateTwitchAPI());
+        document.getElementById('twitch-api-logout-btn').addEventListener('click', () => this.logoutTwitchAPI());
+
         // Electron API event listeners
         if (window.electronAPI) {
             window.electronAPI.onOBSConnected(() => this.onOBSConnected());
@@ -109,6 +113,18 @@ class DebbotApp {
 
             window.electronAPI.onActionTriggered((event, action) => this.onActionTriggered(action));
             window.electronAPI.onLogMessage((event, log) => this.addLogEntry(log));
+
+            window.electronAPI.onTwitchAPIAuthenticated((event, data) => this.onTwitchAPIAuthenticated(data));
+            window.electronAPI.onTwitchAPILoggedOut(() => this.onTwitchAPILoggedOut());
+
+            // Listen for channel point redeems
+            window.electronAPI.onChannelPointRedeem((event, redeemData) => this.onChannelPointRedeem(redeemData));
+
+            // Listen for cheers
+            window.electronAPI.onCheer((event, cheerData) => this.onCheer(cheerData));
+
+            // Listen for subscribers
+            window.electronAPI.onSubscriber((event, subscriberData) => this.onSubscriber(subscriberData));
         }
 
         // IPC event listener for playing sounds
@@ -128,6 +144,12 @@ class DebbotApp {
             // Load settings
             this.settings = await window.electronAPI.loadSettings() || {};
             this.populateSettings();
+
+            // Check Twitch API status
+            const apiStatus = await window.electronAPI.getTwitchAPIStatus();
+            if (apiStatus.authenticated) {
+                this.onTwitchAPIAuthenticated({ user: apiStatus.user });
+            }
 
             // Load actions
             this.actions = await window.electronAPI.loadActions() || [];
@@ -158,13 +180,21 @@ class DebbotApp {
 
     updateTriggerFields(triggerType) {
         const commandGroup = document.getElementById('command-group');
+        const channelPointsGroup = document.getElementById('channel-points-group');
         const permissionsGroup = document.getElementById('permissions-group');
 
         if (triggerType === 'command') {
             commandGroup.style.display = 'block';
+            channelPointsGroup.style.display = 'none';
             permissionsGroup.style.display = 'block';
+        } else if (triggerType === 'channel_points') {
+            commandGroup.style.display = 'none';
+            channelPointsGroup.style.display = 'block';
+            permissionsGroup.style.display = 'none'; // Channel points don't need permissions
+            this.populateChannelPointRewards();
         } else {
             commandGroup.style.display = 'none';
+            channelPointsGroup.style.display = 'none';
             permissionsGroup.style.display = 'none';
         }
     }
@@ -339,14 +369,23 @@ class DebbotApp {
         document.getElementById('action-name').value = action?.name || '';
         document.getElementById('action-trigger').value = action?.trigger || 'command';
         document.getElementById('action-command').value = action?.command || '';
+        document.getElementById('action-reward').value = action?.reward || '';
 
         // Set permissions
         document.getElementById('perm-viewer').checked = this.currentAction.permissions?.viewer ?? true;
         document.getElementById('perm-moderator').checked = this.currentAction.permissions?.moderator ?? true;
         document.getElementById('perm-broadcaster').checked = this.currentAction.permissions?.broadcaster ?? true;
 
-        this.updateTriggerFields(action?.trigger || 'command');
-        this.renderActionSteps();
+            this.updateTriggerFields(action?.trigger || 'command');
+            this.renderActionSteps();
+
+            // If this is a channel points action, populate rewards and set the selected value
+            if (action?.trigger === 'channel_points' && action?.reward) {
+                // Small delay to ensure populateChannelPointRewards has completed
+                setTimeout(() => {
+                    document.getElementById('action-reward').value = action.reward;
+                }, 100);
+            }
 
         document.getElementById('action-modal').classList.add('active');
     }
@@ -427,6 +466,7 @@ class DebbotApp {
         this.currentAction.name = name;
         this.currentAction.trigger = document.getElementById('action-trigger').value;
         this.currentAction.command = document.getElementById('action-command').value.trim();
+        this.currentAction.reward = document.getElementById('action-reward').value.trim();
 
         // Update permissions
         this.currentAction.permissions = {
@@ -529,8 +569,20 @@ class DebbotApp {
             const actionElement = document.createElement('div');
             actionElement.className = 'action-item';
 
-            const triggerText = action.trigger === 'command' ? `Command: ${action.command}` :
-                              action.trigger === 'manual' ? 'Manual trigger' : 'Timer trigger';
+            let triggerText = '';
+            if (action.trigger === 'command') {
+                triggerText = `Command: ${action.command}`;
+            } else if (action.trigger === 'channel_points') {
+                triggerText = `Channel Points: ${action.reward || 'Any reward'}`;
+            } else if (action.trigger === 'timer') {
+                triggerText = 'Timer trigger';
+            } else if (action.trigger === 'cheer') {
+                triggerText = 'Cheer (Bits)';
+            } else if (action.trigger === 'subscriber') {
+                triggerText = 'Subscriber';
+            } else {
+                triggerText = 'Unknown trigger';
+            }
 
             actionElement.innerHTML = `
                 <div class="action-info">
@@ -742,6 +794,178 @@ class DebbotApp {
         } catch (error) {
             console.error('Alternative playback also failed:', error);
             this.addLogEntry({ level: 'error', message: `All audio playback methods failed: ${error.message}` });
+        }
+    }
+
+    // Twitch API Methods
+    async authenticateTwitchAPI() {
+        try {
+            const result = await window.electronAPI.authenticateTwitchAPI();
+            this.addLogEntry({ level: 'success', message: 'Twitch API authentication successful' });
+        } catch (error) {
+            console.error('Twitch API authentication error:', error);
+            this.addLogEntry({ level: 'error', message: `Twitch API authentication failed: ${error.message}` });
+        }
+    }
+
+    async logoutTwitchAPI() {
+        try {
+            await window.electronAPI.logoutTwitchAPI();
+            this.addLogEntry({ level: 'info', message: 'Logged out of Twitch API' });
+        } catch (error) {
+            console.error('Twitch API logout error:', error);
+            this.addLogEntry({ level: 'error', message: `Twitch API logout failed: ${error.message}` });
+        }
+    }
+
+    onTwitchAPIAuthenticated(data) {
+        const statusElement = document.getElementById('twitch-api-status');
+        const nameElement = document.getElementById('broadcaster-name');
+        const infoElement = document.getElementById('broadcaster-info');
+        const loginBtn = document.getElementById('twitch-api-login-btn');
+        const logoutBtn = document.getElementById('twitch-api-logout-btn');
+
+        statusElement.className = 'status connected';
+        statusElement.textContent = 'Authenticated';
+        nameElement.textContent = data.user.display_name;
+        infoElement.style.display = 'block';
+
+        loginBtn.disabled = true;
+        logoutBtn.disabled = false;
+
+        this.addLogEntry({ level: 'success', message: `Authenticated as ${data.user.display_name}` });
+    }
+
+    onTwitchAPILoggedOut() {
+        const statusElement = document.getElementById('twitch-api-status');
+        const infoElement = document.getElementById('broadcaster-info');
+        const loginBtn = document.getElementById('twitch-api-login-btn');
+        const logoutBtn = document.getElementById('twitch-api-logout-btn');
+
+        statusElement.className = 'status disconnected';
+        statusElement.textContent = 'Not Authenticated';
+        infoElement.style.display = 'none';
+
+        loginBtn.disabled = false;
+        logoutBtn.disabled = true;
+
+        this.addLogEntry({ level: 'info', message: 'Logged out of Twitch API' });
+    }
+
+    async onChannelPointRedeem(redeemData) {
+        console.log('Channel point redeem received:', redeemData);
+
+        // Trigger the action through the backend
+        try {
+            await window.electronAPI.triggerChannelPoint(redeemData);
+            this.addLogEntry({
+                level: 'success',
+                message: `${redeemData.userName} redeemed "${redeemData.rewardTitle}" (${redeemData.rewardId})`
+            });
+        } catch (error) {
+            console.error('Failed to trigger channel point action:', error);
+            this.addLogEntry({
+                level: 'error',
+                message: `Failed to process channel point redeem: ${error.message}`
+            });
+        }
+    }
+
+    async onCheer(cheerData) {
+        console.log('Cheer received:', cheerData);
+
+        // Trigger the action through the backend
+        try {
+            await window.electronAPI.triggerCheer(cheerData);
+            const userDisplay = cheerData.isAnonymous ? 'Anonymous' : cheerData.userName;
+            this.addLogEntry({
+                level: 'success',
+                message: `${userDisplay} cheered ${cheerData.bits} bits`
+            });
+        } catch (error) {
+            console.error('Failed to trigger cheer action:', error);
+            this.addLogEntry({
+                level: 'error',
+                message: `Failed to process cheer: ${error.message}`
+            });
+        }
+    }
+
+    async onSubscriber(subscriberData) {
+        console.log('Subscriber event received:', subscriberData);
+
+        // Trigger the action through the backend
+        try {
+            await window.electronAPI.triggerSubscriber(subscriberData);
+            let message = '';
+            if (subscriberData.isGift) {
+                message = `${subscriberData.userName} received a gifted subscription from ${subscriberData.gifterName}`;
+            } else if (subscriberData.cumulativeMonths > 1) {
+                message = `${subscriberData.userName} resubscribed for ${subscriberData.cumulativeMonths} months`;
+            } else {
+                message = `${subscriberData.userName} subscribed`;
+            }
+            this.addLogEntry({
+                level: 'success',
+                message: message
+            });
+        } catch (error) {
+            console.error('Failed to trigger subscriber action:', error);
+            this.addLogEntry({
+                level: 'error',
+                message: `Failed to process subscriber event: ${error.message}`
+            });
+        }
+    }
+
+    async populateChannelPointRewards() {
+        const rewardSelect = document.getElementById('action-reward');
+
+        // Store the current selected value before clearing
+        const currentValue = rewardSelect.value;
+
+        rewardSelect.innerHTML = '<option value="">Select a reward...</option>';
+
+        try {
+            // Get the broadcaster ID from the authenticated user
+            const apiStatus = await window.electronAPI.getTwitchAPIStatus();
+            if (!apiStatus.authenticated || !apiStatus.user) {
+                rewardSelect.innerHTML = '<option value="">Please authenticate as broadcaster first</option>';
+                return;
+            }
+
+            // Get custom rewards from Twitch API
+            const rewards = await window.electronAPI.getCustomRewards(apiStatus.user.id);
+
+            // Populate the dropdown
+            rewards.forEach(reward => {
+                const option = document.createElement('option');
+                option.value = reward.id;
+                option.textContent = `${reward.title} (${reward.cost} points)`;
+                rewardSelect.appendChild(option);
+            });
+
+            if (rewards.length === 0) {
+                rewardSelect.innerHTML = '<option value="">No channel point rewards found</option>';
+            } else {
+                // Add an "Any Reward" option
+                const anyOption = document.createElement('option');
+                anyOption.value = '';
+                anyOption.textContent = 'Any Reward (triggers on all redeems)';
+                rewardSelect.insertBefore(anyOption, rewardSelect.firstChild);
+
+                // Restore the previously selected value if it exists
+                if (currentValue && currentValue !== '') {
+                    rewardSelect.value = currentValue;
+                } else {
+                    // Default to "Any Reward" if no previous selection
+                    rewardSelect.value = '';
+                }
+            }
+
+        } catch (error) {
+            console.error('Failed to load channel point rewards:', error);
+            rewardSelect.innerHTML = '<option value="">Failed to load rewards</option>';
         }
     }
 
