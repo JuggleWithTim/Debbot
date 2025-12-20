@@ -206,6 +206,10 @@ class ActionManager {
                 await this.executeDelayStep(value);
                 break;
 
+            case 'twitch_clip':
+                await this.executeTwitchClipStep();
+                break;
+
             default:
                 console.warn(`Unknown step type: ${type}`);
         }
@@ -350,6 +354,28 @@ class ActionManager {
 
         console.log(`Delaying for ${delay}ms`);
         await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    async executeTwitchClipStep() {
+        if (!global.twitchApiClient || !global.twitchApiClient.isAuthenticated()) {
+            throw new Error('Twitch API not authenticated');
+        }
+
+        // Get the broadcaster ID (should be the authenticated user's ID)
+        const user = global.twitchApiClient.getUser();
+        if (!user) {
+            throw new Error('No authenticated Twitch user found');
+        }
+
+        const clip = await global.twitchApiClient.createClip(user.id);
+
+        // Log the action
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('log:message', {
+                level: 'success',
+                message: `Created clip: ${clip.edit_url}`
+            });
+        }
     }
 
     // Trigger handling
@@ -732,7 +758,7 @@ TWITCH_CLIENT_SECRET=${envVars.TWITCH_CLIENT_SECRET || 'your_client_secret_here'
             action.steps.forEach((step, index) => {
                 if (!step.type) {
                     errors.push(`Step ${index + 1} is missing type`);
-                } else if (!step.value && !['obs_start_streaming', 'obs_stop_streaming', 'obs_source_show', 'obs_source_hide'].includes(step.type)) {
+                } else if (!step.value && !['obs_start_streaming', 'obs_stop_streaming', 'obs_source_show', 'obs_source_hide', 'twitch_clip'].includes(step.type)) {
                     errors.push(`Step ${index + 1} is missing value`);
                 }
             });

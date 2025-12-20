@@ -646,10 +646,11 @@ class DebbotApp {
                     <option value="obs_start_streaming" ${step.type === 'obs_start_streaming' ? 'selected' : ''}>Start OBS Streaming</option>
                     <option value="obs_stop_streaming" ${step.type === 'obs_stop_streaming' ? 'selected' : ''}>Stop OBS Streaming</option>
                     <option value="twitch_message" ${step.type === 'twitch_message' ? 'selected' : ''}>Send Twitch Message</option>
+                    <option value="twitch_clip" ${step.type === 'twitch_clip' ? 'selected' : ''}>Create Twitch Clip</option>
                     <option value="play_sound" ${step.type === 'play_sound' ? 'selected' : ''}>Play Sound</option>
                     <option value="delay" ${step.type === 'delay' ? 'selected' : ''}>Delay</option>
                 </select>
-                <input type="text" class="step-value" placeholder="${step.type === 'play_sound' ? 'Path to audio file' : step.type === 'delay' ? 'Delay in milliseconds' : step.type === 'twitch_message' ? 'Message to send' : 'Scene/Source name'}" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' ? 'disabled' : ''}>
+                <input type="text" class="step-value" placeholder="${step.type === 'play_sound' ? 'Path to audio file' : step.type === 'delay' ? 'Delay in milliseconds' : step.type === 'twitch_message' ? 'Message to send' : step.type === 'twitch_clip' ? 'Creates clip from last 90 seconds' : 'Scene/Source name'}" value="${step.value}" ${step.type === 'obs_start_streaming' || step.type === 'obs_stop_streaming' || step.type === 'twitch_clip' ? 'disabled' : ''}>
                 <button class="step-remove" onclick="app.removeActionStep(${index})">×</button>
             `;
 

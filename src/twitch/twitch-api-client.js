@@ -31,7 +31,7 @@ class TwitchAPIClient {
             `client_id=${this.clientId}&` +
             `redirect_uri=${encodeURIComponent(this.redirectUri)}&` +
             `response_type=code&` +
-            `scope=${encodeURIComponent('channel:read:redemptions channel:manage:redemptions bits:read channel:read:subscriptions')}`;
+            `scope=${encodeURIComponent('channel:read:redemptions channel:manage:redemptions bits:read channel:read:subscriptions clips:edit')}`;
 
         return new Promise(async (resolve, reject) => {
             try {
@@ -314,6 +314,22 @@ class TwitchAPIClient {
     async getCustomRewards(broadcasterId) {
         const response = await this.apiCall(`https://api.twitch.tv/helix/channel_points/custom_rewards?broadcaster_id=${broadcasterId}`);
         return response.data.data;
+    }
+
+    /**
+     * Create a clip from the last 90 seconds of the broadcaster's stream
+     */
+    async createClip(broadcasterId) {
+        const response = await this.apiCall('https://api.twitch.tv/helix/clips', {
+            method: 'POST',
+            data: {
+                broadcaster_id: broadcasterId
+            }
+        });
+
+        const clip = response.data.data[0];
+        console.log(`Created clip: ${clip.id} - ${clip.edit_url}`);
+        return clip;
     }
 
     /**
