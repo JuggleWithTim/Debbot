@@ -78,10 +78,8 @@ class DebbotApp {
         document.getElementById('add-action-btn').addEventListener('click', () => this.openActionModal());
         document.getElementById('add-step-btn').addEventListener('click', () => this.addActionStep());
 
-        // Trigger type change
-        document.getElementById('action-trigger').addEventListener('change', (e) => {
-            this.updateTriggerFields(e.target.value);
-        });
+        // Add trigger button
+        document.getElementById('add-trigger-btn').addEventListener('click', () => this.addTrigger());
 
         // Permission checkboxes
         ['perm-viewer', 'perm-moderator', 'perm-broadcaster'].forEach(id => {
@@ -357,6 +355,7 @@ class DebbotApp {
 
         this.currentAction = action || {
             id: Date.now().toString(),
+            triggers: [{ type: 'command', config: {} }],
             steps: [],
             permissions: {
                 viewer: true,
@@ -367,25 +366,14 @@ class DebbotApp {
 
         document.getElementById('modal-title').textContent = action ? 'Edit Action' : 'Create Action';
         document.getElementById('action-name').value = action?.name || '';
-        document.getElementById('action-trigger').value = action?.trigger || 'command';
-        document.getElementById('action-command').value = action?.command || '';
-        document.getElementById('action-reward').value = action?.reward || '';
 
         // Set permissions
         document.getElementById('perm-viewer').checked = this.currentAction.permissions?.viewer ?? true;
         document.getElementById('perm-moderator').checked = this.currentAction.permissions?.moderator ?? true;
         document.getElementById('perm-broadcaster').checked = this.currentAction.permissions?.broadcaster ?? true;
 
-            this.updateTriggerFields(action?.trigger || 'command');
-            this.renderActionSteps();
-
-            // If this is a channel points action, populate rewards and set the selected value
-            if (action?.trigger === 'channel_points' && action?.reward) {
-                // Small delay to ensure populateChannelPointRewards has completed
-                setTimeout(() => {
-                    document.getElementById('action-reward').value = action.reward;
-                }, 100);
-            }
+        this.renderTriggers();
+        this.renderActionSteps();
 
         document.getElementById('action-modal').classList.add('active');
     }
@@ -396,7 +384,7 @@ class DebbotApp {
 
         // Clear form
         document.getElementById('action-name').value = '';
-        document.getElementById('action-command').value = '';
+        document.getElementById('triggers-container').innerHTML = '';
         document.getElementById('action-steps').innerHTML = '';
     }
 
@@ -427,6 +415,111 @@ class DebbotApp {
         this.collectCurrentStepValues();
         this.currentAction.steps.splice(index, 1);
         this.renderActionSteps();
+    }
+
+    addTrigger() {
+        const trigger = {
+            type: 'command',
+            config: {}
+        };
+
+        this.currentAction.triggers.push(trigger);
+        this.renderTriggers();
+    }
+
+    removeTrigger(index) {
+        this.currentAction.triggers.splice(index, 1);
+        this.renderTriggers();
+    }
+
+    renderTriggers() {
+        const container = document.getElementById('triggers-container');
+        container.innerHTML = '';
+
+        this.currentAction.triggers.forEach((trigger, index) => {
+            const triggerElement = document.createElement('div');
+            triggerElement.className = 'trigger-item';
+
+            let configHtml = '';
+            if (trigger.type === 'command') {
+                configHtml = `<input type="text" class="trigger-command" placeholder="!command" value="${trigger.config.command || ''}">`;
+            } else if (trigger.type === 'channel_points') {
+                configHtml = `<select class="trigger-reward">
+                    <option value="">Any Reward</option>
+                    <!-- Rewards will be populated dynamically -->
+                </select>`;
+            }
+
+            triggerElement.innerHTML = `
+                <select class="trigger-type">
+                    <option value="command" ${trigger.type === 'command' ? 'selected' : ''}>Chat Command</option>
+                    <option value="channel_points" ${trigger.type === 'channel_points' ? 'selected' : ''}>Channel Point Redeem</option>
+                    <option value="cheer" ${trigger.type === 'cheer' ? 'selected' : ''}>Cheer (Bits)</option>
+                    <option value="subscriber" ${trigger.type === 'subscriber' ? 'selected' : ''}>Subscriber</option>
+                    <option value="timer" ${trigger.type === 'timer' ? 'selected' : ''}>Timer</option>
+                </select>
+                ${configHtml}
+                <button class="trigger-remove" onclick="app.removeTrigger(${index})">×</button>
+            `;
+
+            // Add event listener for trigger type change
+            const typeSelect = triggerElement.querySelector('.trigger-type');
+            typeSelect.addEventListener('change', (e) => {
+                this.updateTriggerConfig(index, e.target.value);
+            });
+
+            // Populate channel point rewards if needed
+            if (trigger.type === 'channel_points') {
+                const rewardSelect = triggerElement.querySelector('.trigger-reward');
+                this.populateTriggerRewards(rewardSelect, trigger.config.reward);
+            }
+
+            container.appendChild(triggerElement);
+        });
+    }
+
+    updateTriggerConfig(triggerIndex, newType) {
+        // Update the trigger type and reset config
+        this.currentAction.triggers[triggerIndex].type = newType;
+        this.currentAction.triggers[triggerIndex].config = {};
+
+        // Re-render triggers to update the UI
+        this.renderTriggers();
+    }
+
+    async populateTriggerRewards(rewardSelect, selectedValue = '') {
+        rewardSelect.innerHTML = '<option value="">Any Reward</option>';
+
+        try {
+            // Get the broadcaster ID from the authenticated user
+            const apiStatus = await window.electronAPI.getTwitchAPIStatus();
+            if (!apiStatus.authenticated || !apiStatus.user) {
+                rewardSelect.innerHTML = '<option value="">Please authenticate as broadcaster first</option>';
+                return;
+            }
+
+            // Get custom rewards from Twitch API
+            const rewards = await window.electronAPI.getCustomRewards(apiStatus.user.id);
+
+            // Populate the dropdown
+            rewards.forEach(reward => {
+                const option = document.createElement('option');
+                option.value = reward.id;
+                option.textContent = `${reward.title} (${reward.cost} points)`;
+                if (selectedValue === reward.id) {
+                    option.selected = true;
+                }
+                rewardSelect.appendChild(option);
+            });
+
+            if (rewards.length === 0) {
+                rewardSelect.innerHTML = '<option value="">No channel point rewards found</option>';
+            }
+
+        } catch (error) {
+            console.error('Failed to load channel point rewards:', error);
+            rewardSelect.innerHTML = '<option value="">Failed to load rewards</option>';
+        }
     }
 
     renderActionSteps() {
@@ -462,11 +555,23 @@ class DebbotApp {
             return;
         }
 
+        // Collect triggers
+        const triggerElements = document.querySelectorAll('.trigger-item');
+        this.currentAction.triggers = Array.from(triggerElements).map(triggerElement => {
+            const type = triggerElement.querySelector('.trigger-type').value;
+            const config = {};
+
+            if (type === 'command') {
+                config.command = triggerElement.querySelector('.trigger-command').value.trim();
+            } else if (type === 'channel_points') {
+                config.reward = triggerElement.querySelector('.trigger-reward').value;
+            }
+
+            return { type, config };
+        });
+
         // Update action data
         this.currentAction.name = name;
-        this.currentAction.trigger = document.getElementById('action-trigger').value;
-        this.currentAction.command = document.getElementById('action-command').value.trim();
-        this.currentAction.reward = document.getElementById('action-reward').value.trim();
 
         // Update permissions
         this.currentAction.permissions = {
@@ -569,25 +674,33 @@ class DebbotApp {
             const actionElement = document.createElement('div');
             actionElement.className = 'action-item';
 
-            let triggerText = '';
-            if (action.trigger === 'command') {
-                triggerText = `Command: ${action.command}`;
-            } else if (action.trigger === 'channel_points') {
-                triggerText = `Channel Points: ${action.reward || 'Any reward'}`;
-            } else if (action.trigger === 'timer') {
-                triggerText = 'Timer trigger';
-            } else if (action.trigger === 'cheer') {
-                triggerText = 'Cheer (Bits)';
-            } else if (action.trigger === 'subscriber') {
-                triggerText = 'Subscriber';
+            let triggerTexts = [];
+            if (action.triggers && action.triggers.length > 0) {
+                action.triggers.forEach(trigger => {
+                    let triggerText = '';
+                    if (trigger.type === 'command') {
+                        triggerText = `Command: ${trigger.config.command || 'N/A'}`;
+                    } else if (trigger.type === 'channel_points') {
+                        triggerText = `Channel Points: ${trigger.config.reward || 'Any reward'}`;
+                    } else if (trigger.type === 'timer') {
+                        triggerText = 'Timer trigger';
+                    } else if (trigger.type === 'cheer') {
+                        triggerText = 'Cheer (Bits)';
+                    } else if (trigger.type === 'subscriber') {
+                        triggerText = 'Subscriber';
+                    } else {
+                        triggerText = 'Unknown trigger';
+                    }
+                    triggerTexts.push(triggerText);
+                });
             } else {
-                triggerText = 'Unknown trigger';
+                triggerTexts.push('No triggers');
             }
 
             actionElement.innerHTML = `
                 <div class="action-info">
                     <h3>${action.name}</h3>
-                    <div class="action-details">${triggerText} • ${action.steps.length} step${action.steps.length !== 1 ? 's' : ''}</div>
+                    <div class="action-details">${triggerTexts.join(', ')} • ${action.steps.length} step${action.steps.length !== 1 ? 's' : ''}</div>
                 </div>
                 <div class="action-controls">
                     <button class="btn btn-success" onclick="app.testAction('${action.id}')">Test</button>

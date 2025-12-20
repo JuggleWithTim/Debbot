@@ -64,7 +64,7 @@ class ActionManager {
 
         // Ensure action has required fields
         action.name = action.name || 'Unnamed Action';
-        action.trigger = action.trigger || 'command';
+        action.triggers = action.triggers || [{ type: 'command', config: {} }];
         action.steps = action.steps || [];
 
         this.actions.push(action);
@@ -108,16 +108,20 @@ class ActionManager {
         return this.actions.find(a => a.id === actionId);
     }
 
-    getActionsByTrigger(trigger) {
-        return this.actions.filter(a => a.trigger === trigger);
+    getActionsByTrigger(triggerType) {
+        return this.actions.filter(a =>
+            a.triggers && a.triggers.some(trigger => trigger.type === triggerType)
+        );
     }
 
     getActionsByCommand(command) {
         return this.actions.filter(a => {
-            if (a.trigger !== 'command') return false;
+            const commandTrigger = a.triggers.find(t => t.type === 'command');
+            if (!commandTrigger) return false;
 
             // Normalize command comparison by removing ! prefix
-            const normalizedStoredCommand = a.command.startsWith('!') ? a.command.substring(1) : a.command;
+            const normalizedStoredCommand = commandTrigger.config.command.startsWith('!') ?
+                commandTrigger.config.command.substring(1) : commandTrigger.config.command;
             const normalizedInputCommand = command.startsWith('!') ? command.substring(1) : command;
 
             return normalizedStoredCommand === normalizedInputCommand;
@@ -388,13 +392,14 @@ class ActionManager {
 
     getActionsByChannelPoints(rewardId) {
         return this.actions.filter(a => {
-            if (a.trigger !== 'channel_points') return false;
+            const channelPointTrigger = a.triggers.find(t => t.type === 'channel_points');
+            if (!channelPointTrigger) return false;
 
             // If no specific reward is set, trigger on any reward
-            if (!a.reward) return true;
+            if (!channelPointTrigger.config.reward) return true;
 
             // Otherwise, match the specific reward ID
-            return a.reward === rewardId;
+            return channelPointTrigger.config.reward === rewardId;
         });
     }
 
@@ -594,12 +599,20 @@ TWITCH_CLIENT_SECRET=${envVars.TWITCH_CLIENT_SECRET || 'your_client_secret_here'
             errors.push('Action must have a valid name');
         }
 
-        if (!['command', 'timer', 'channel_points', 'cheer', 'subscriber'].includes(action.trigger)) {
-            errors.push('Action must have a valid trigger type');
-        }
+        if (!Array.isArray(action.triggers) || action.triggers.length === 0) {
+            errors.push('Action must have at least one trigger');
+        } else {
+            action.triggers.forEach((trigger, index) => {
+                if (!trigger.type) {
+                    errors.push(`Trigger ${index + 1} is missing type`);
+                } else if (!['command', 'timer', 'channel_points', 'cheer', 'subscriber'].includes(trigger.type)) {
+                    errors.push(`Trigger ${index + 1} has invalid type: ${trigger.type}`);
+                }
 
-        if (action.trigger === 'command' && (!action.command || typeof action.command !== 'string')) {
-            errors.push('Command-triggered actions must have a command');
+                if (trigger.type === 'command' && (!trigger.config?.command || typeof trigger.config.command !== 'string')) {
+                    errors.push(`Command trigger ${index + 1} must have a command`);
+                }
+            });
         }
 
         if (!Array.isArray(action.steps)) {
