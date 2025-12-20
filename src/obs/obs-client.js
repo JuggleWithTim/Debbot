@@ -125,17 +125,27 @@ class OBSClient {
         }
 
         try {
+            const currentScene = await this.getCurrentScene();
+
+            // Get the scene item ID for the source in the current scene
+            const { sceneItemId } = await this.obs.call('GetSceneItemId', {
+                sceneName: currentScene,
+                sourceName: sourceName
+            });
+
             // If visibility is not specified, toggle current state
             if (visible === null) {
-                const { inputMuted } = await this.obs.call('GetInputMute', {
-                    inputName: sourceName
+                const { sceneItemEnabled } = await this.obs.call('GetSceneItemEnabled', {
+                    sceneName: currentScene,
+                    sceneItemId: sceneItemId
                 });
-                visible = !inputMuted;
+                visible = !sceneItemEnabled;
             }
 
-            await this.obs.call('SetInputMute', {
-                inputName: sourceName,
-                inputMuted: !visible
+            await this.obs.call('SetSceneItemEnabled', {
+                sceneName: currentScene,
+                sceneItemId: sceneItemId,
+                sceneItemEnabled: visible
             });
 
             console.log(`Source "${sourceName}" set to ${visible ? 'visible' : 'hidden'}`);
@@ -144,6 +154,14 @@ class OBSClient {
             console.error('Error toggling source:', error);
             throw error;
         }
+    }
+
+    async showSource(sourceName) {
+        return this.toggleSource(sourceName, true);
+    }
+
+    async hideSource(sourceName) {
+        return this.toggleSource(sourceName, false);
     }
 
     async getCurrentScene() {

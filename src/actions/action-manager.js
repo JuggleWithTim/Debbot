@@ -178,6 +178,14 @@ class ActionManager {
                 await this.executeOBSSourceStep(value);
                 break;
 
+            case 'obs_source_show':
+                await this.executeOBSSourceShowStep(value);
+                break;
+
+            case 'obs_source_hide':
+                await this.executeOBSSourceHideStep(value);
+                break;
+
             case 'obs_start_streaming':
                 await this.executeOBSStartStreamingStep();
                 break;
@@ -231,6 +239,38 @@ class ActionManager {
             global.mainWindow.webContents.send('log:message', {
                 level: 'success',
                 message: `Toggled OBS source: ${sourceName}`
+            });
+        }
+    }
+
+    async executeOBSSourceShowStep(sourceName) {
+        if (!global.obsClient || !global.obsClient.isConnected()) {
+            throw new Error('OBS not connected');
+        }
+
+        await global.obsClient.showSource(sourceName);
+
+        // Log the action
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('log:message', {
+                level: 'success',
+                message: `Showed OBS source: ${sourceName}`
+            });
+        }
+    }
+
+    async executeOBSSourceHideStep(sourceName) {
+        if (!global.obsClient || !global.obsClient.isConnected()) {
+            throw new Error('OBS not connected');
+        }
+
+        await global.obsClient.hideSource(sourceName);
+
+        // Log the action
+        if (global.mainWindow) {
+            global.mainWindow.webContents.send('log:message', {
+                level: 'success',
+                message: `Hid OBS source: ${sourceName}`
             });
         }
     }
@@ -692,7 +732,7 @@ TWITCH_CLIENT_SECRET=${envVars.TWITCH_CLIENT_SECRET || 'your_client_secret_here'
             action.steps.forEach((step, index) => {
                 if (!step.type) {
                     errors.push(`Step ${index + 1} is missing type`);
-                } else if (!step.value && !['obs_start_streaming', 'obs_stop_streaming'].includes(step.type)) {
+                } else if (!step.value && !['obs_start_streaming', 'obs_stop_streaming', 'obs_source_show', 'obs_source_hide'].includes(step.type)) {
                     errors.push(`Step ${index + 1} is missing value`);
                 }
             });

@@ -591,6 +591,8 @@ class DebbotApp {
                 <select class="step-type">
                     <option value="obs_scene" ${step.type === 'obs_scene' ? 'selected' : ''}>Switch OBS Scene</option>
                     <option value="obs_source" ${step.type === 'obs_source' ? 'selected' : ''}>Toggle OBS Source</option>
+                    <option value="obs_source_show" ${step.type === 'obs_source_show' ? 'selected' : ''}>Show OBS Source</option>
+                    <option value="obs_source_hide" ${step.type === 'obs_source_hide' ? 'selected' : ''}>Hide OBS Source</option>
                     <option value="obs_start_streaming" ${step.type === 'obs_start_streaming' ? 'selected' : ''}>Start OBS Streaming</option>
                     <option value="obs_stop_streaming" ${step.type === 'obs_stop_streaming' ? 'selected' : ''}>Stop OBS Streaming</option>
                     <option value="twitch_message" ${step.type === 'twitch_message' ? 'selected' : ''}>Send Twitch Message</option>
