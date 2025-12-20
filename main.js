@@ -117,9 +117,28 @@ function setupIPCHandlers() {
 
   ipcMain.handle('obs:disconnect', async () => {
     try {
+      // Stop any ongoing reconnection attempts
+      obsClient.stopReconnection();
       await obsClient.disconnect();
       mainWindow.webContents.send('obs:disconnected');
       return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('obs:setAutoReconnect', async (event, enabled) => {
+    try {
+      obsClient.setAutoReconnect(enabled);
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('obs:getReconnectionStatus', async () => {
+    try {
+      return obsClient.getReconnectionStatus();
     } catch (error) {
       throw error;
     }

@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // OBS related functions
   connectOBS: (config) => ipcRenderer.invoke('obs:connect', config),
   disconnectOBS: () => ipcRenderer.invoke('obs:disconnect'),
+  setAutoReconnect: (enabled) => ipcRenderer.invoke('obs:setAutoReconnect', enabled),
+  getReconnectionStatus: () => ipcRenderer.invoke('obs:getReconnectionStatus'),
   getOBSScenes: () => ipcRenderer.invoke('obs:getScenes'),
   switchOBSScene: (sceneName) => ipcRenderer.invoke('obs:switchScene', sceneName),
   getOBSSources: () => ipcRenderer.invoke('obs:getSources'),
@@ -40,6 +42,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Event listeners
   onOBSConnected: (callback) => ipcRenderer.on('obs:connected', callback),
   onOBSDisconnected: (callback) => ipcRenderer.on('obs:disconnected', callback),
+  onOBSReconnected: (callback) => ipcRenderer.on('obs:reconnected', callback),
+  onOBSReconnecting: (callback) => ipcRenderer.on('obs:reconnecting', callback),
+  onOBSReconnectionFailed: (callback) => ipcRenderer.on('obs:reconnection_failed', callback),
   onOBSStatus: (callback) => ipcRenderer.on('obs:status', callback),
 
   onTwitchConnected: (callback) => ipcRenderer.on('twitch:connected', callback),
