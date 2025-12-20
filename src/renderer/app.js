@@ -70,6 +70,9 @@ class DebbotApp {
         document.getElementById('obs-connect-btn').addEventListener('click', () => this.connectOBS());
         document.getElementById('obs-disconnect-btn').addEventListener('click', () => this.disconnectOBS());
 
+        // OBS auto-reconnect setting
+        document.getElementById('obs-auto-reconnect').addEventListener('change', (e) => this.setAutoReconnect(e.target.checked));
+
         // Twitch connection buttons
         document.getElementById('twitch-connect-btn').addEventListener('click', () => this.connectTwitch());
         document.getElementById('twitch-disconnect-btn').addEventListener('click', () => this.disconnectTwitch());
@@ -106,6 +109,9 @@ class DebbotApp {
         if (window.electronAPI) {
             window.electronAPI.onOBSConnected(() => this.onOBSConnected());
             window.electronAPI.onOBSDisconnected(() => this.onOBSDisconnected());
+            window.electronAPI.onOBSReconnected(() => this.onOBSReconnected());
+            window.electronAPI.onOBSReconnecting((event, data) => this.onOBSReconnecting(data));
+            window.electronAPI.onOBSReconnectionFailed((event, data) => this.onOBSReconnectionFailed(data));
             window.electronAPI.onOBSStatus((event, status) => this.onOBSStatus(status));
 
             window.electronAPI.onTwitchConnected(() => this.onTwitchConnected());
@@ -178,6 +184,7 @@ class DebbotApp {
         document.getElementById('obs-host').value = this.settings.obs?.host || 'localhost';
         document.getElementById('obs-port').value = this.settings.obs?.port || 4455;
         document.getElementById('obs-password').value = this.settings.obs?.password || '';
+        document.getElementById('obs-auto-reconnect').checked = this.settings.obs?.autoReconnect !== false; // Default to true
 
         // Populate Twitch settings
         document.getElementById('twitch-username').value = this.settings.twitch?.username || '';
@@ -251,6 +258,43 @@ class DebbotApp {
         this.addLogEntry({ level: 'info', message: 'Disconnected from OBS' });
     }
 
+    onOBSReconnected() {
+        this.obsConnected = true;
+        this.setOBSStatus('connected');
+        this.addLogEntry({ level: 'success', message: 'Successfully reconnected to OBS' });
+    }
+
+    onOBSReconnecting(data) {
+        this.obsConnected = false;
+        this.setOBSStatus('reconnecting');
+        this.addLogEntry({
+            level: 'info',
+            message: `Attempting to reconnect to OBS (${data.attempt}/${data.maxAttempts})...`
+        });
+    }
+
+    onOBSReconnectionFailed(data) {
+        this.obsConnected = false;
+        this.setOBSStatus('disconnected');
+        this.addLogEntry({
+            level: 'error',
+            message: `OBS reconnection failed after ${data.attempts} attempts`
+        });
+    }
+
+    async setAutoReconnect(enabled) {
+        try {
+            await window.electronAPI.setAutoReconnect(enabled);
+            this.addLogEntry({
+                level: 'info',
+                message: `Auto-reconnection ${enabled ? 'enabled' : 'disabled'}`
+            });
+        } catch (error) {
+            console.error('Failed to set auto-reconnect:', error);
+            this.addLogEntry({ level: 'error', message: `Failed to set auto-reconnect: ${error.message}` });
+        }
+    }
+
     onOBSStatus(status) {
         // Handle status updates from OBS
         console.log('OBS status:', status);
@@ -259,7 +303,13 @@ class DebbotApp {
     setOBSStatus(status) {
         const statusElement = document.getElementById('obs-status');
         statusElement.className = `status ${status}`;
-        statusElement.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+
+        // Show more descriptive status text
+        let statusText = status.charAt(0).toUpperCase() + status.slice(1);
+        if (status === 'reconnecting') {
+            statusText = 'Reconnecting...';
+        }
+        statusElement.textContent = statusText;
 
         const connectBtn = document.getElementById('obs-connect-btn');
         const disconnectBtn = document.getElementById('obs-disconnect-btn');
@@ -267,7 +317,7 @@ class DebbotApp {
         if (status === 'connected') {
             connectBtn.disabled = true;
             disconnectBtn.disabled = false;
-        } else if (status === 'connecting') {
+        } else if (status === 'connecting' || status === 'reconnecting') {
             connectBtn.disabled = true;
             disconnectBtn.disabled = true;
         } else {
@@ -591,6 +641,8 @@ class DebbotApp {
                 <select class="step-type">
                     <option value="obs_scene" ${step.type === 'obs_scene' ? 'selected' : ''}>Switch OBS Scene</option>
                     <option value="obs_source" ${step.type === 'obs_source' ? 'selected' : ''}>Toggle OBS Source</option>
+                    <option value="obs_source_show" ${step.type === 'obs_source_show' ? 'selected' : ''}>Show OBS Source</option>
+                    <option value="obs_source_hide" ${step.type === 'obs_source_hide' ? 'selected' : ''}>Hide OBS Source</option>
                     <option value="obs_start_streaming" ${step.type === 'obs_start_streaming' ? 'selected' : ''}>Start OBS Streaming</option>
                     <option value="obs_stop_streaming" ${step.type === 'obs_stop_streaming' ? 'selected' : ''}>Stop OBS Streaming</option>
                     <option value="twitch_message" ${step.type === 'twitch_message' ? 'selected' : ''}>Send Twitch Message</option>
@@ -781,7 +833,8 @@ class DebbotApp {
             obs: {
                 host: document.getElementById('obs-host').value,
                 port: parseInt(document.getElementById('obs-port').value),
-                password: document.getElementById('obs-password').value
+                password: document.getElementById('obs-password').value,
+                autoReconnect: document.getElementById('obs-auto-reconnect').checked
             },
             twitch: {
                 username: document.getElementById('twitch-username').value,
