@@ -454,6 +454,77 @@ class ActionManager {
         }
     }
 
+    // MIDI trigger handling
+    async handleMIDITrigger(midiData) {
+        const { type, note, controller, value, velocity, channel } = midiData;
+
+        const actions = this.getActionsByMIDITrigger(midiData);
+        if (actions.length === 0) {
+            return;
+        }
+
+        console.log(`MIDI trigger: ${type} - ${this.getMIDIMessageDescription(midiData)}`);
+
+        // Execute all matching MIDI actions
+        for (const action of actions) {
+            try {
+                await this.executeAction(action.id, midiData);
+            } catch (error) {
+                console.error(`Failed to execute MIDI action ${action.name}:`, error);
+            }
+        }
+    }
+
+    getActionsByMIDITrigger(midiData) {
+        const { type, note, controller, value, velocity, channel } = midiData;
+
+        return this.actions.filter(action => {
+            const midiTrigger = action.triggers.find(t => t.type === 'midi');
+            if (!midiTrigger) return false;
+
+            const config = midiTrigger.config;
+
+            // Check message type
+            if (config.messageType !== type) return false;
+
+            // Check channel (if specified)
+            if (config.channel !== undefined && config.channel !== null && config.channel !== channel) {
+                return false;
+            }
+
+            // Check specific parameters based on message type
+            switch (type) {
+                case 'noteon':
+                case 'noteoff':
+                    return config.note === note;
+                case 'cc':
+                    return config.controller === controller;
+                case 'pitch':
+                    // Pitch bend doesn't have a specific value to match, just trigger on any pitch bend
+                    return true;
+                default:
+                    return false;
+            }
+        });
+    }
+
+    getMIDIMessageDescription(midiData) {
+        const { type, note, controller, value, velocity, channel } = midiData;
+
+        switch (type) {
+            case 'noteon':
+                return `Note ${note} (velocity: ${velocity}) on channel ${channel}`;
+            case 'noteoff':
+                return `Note ${note} off on channel ${channel}`;
+            case 'cc':
+                return `CC ${controller} = ${value} on channel ${channel}`;
+            case 'pitch':
+                return `Pitch bend = ${value} on channel ${channel}`;
+            default:
+                return `${type} on channel ${channel}`;
+        }
+    }
+
     // Settings management
     async loadSettings() {
         let savedSettings = {};
@@ -605,9 +676,9 @@ TWITCH_CLIENT_SECRET=${envVars.TWITCH_CLIENT_SECRET || 'your_client_secret_here'
             action.triggers.forEach((trigger, index) => {
                 if (!trigger.type) {
                     errors.push(`Trigger ${index + 1} is missing type`);
-                } else if (!['command', 'timer', 'channel_points', 'cheer', 'subscriber'].includes(trigger.type)) {
-                    errors.push(`Trigger ${index + 1} has invalid type: ${trigger.type}`);
-                }
+        } else if (!['command', 'timer', 'channel_points', 'cheer', 'subscriber', 'midi'].includes(trigger.type)) {
+            errors.push(`Trigger ${index + 1} has invalid type: ${trigger.type}`);
+        }
 
                 if (trigger.type === 'command' && (!trigger.config?.command || typeof trigger.config.command !== 'string')) {
                     errors.push(`Command trigger ${index + 1} must have a command`);

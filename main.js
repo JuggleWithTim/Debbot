@@ -9,6 +9,7 @@ require('dotenv').config();
 const OBSClient = require('./src/obs/obs-client');
 const TwitchClient = require('./src/twitch/twitch-client');
 const TwitchAPIClient = require('./src/twitch/twitch-api-client');
+const MIDIClient = require('./src/midi/midi-client');
 const ActionManager = require('./src/actions/action-manager');
 
 // Keep a global reference of the window object and services
@@ -16,6 +17,7 @@ let mainWindow;
 let obsClient;
 let twitchClient;
 let twitchAPIClient;
+let midiClient;
 let actionManager;
 
 // Create the main application window
@@ -60,6 +62,15 @@ async function initializeServices() {
   // Make mainWindow available globally for services
   global.mainWindow = mainWindow;
 
+  // Initialize action manager first (needed for settings)
+  actionManager = new ActionManager();
+  global.actionManager = actionManager;
+
+  // Load settings
+  const settings = await actionManager.loadSettings();
+  global.settings = settings;
+  console.log('Settings loaded:', settings);
+
   // Initialize OBS client
   obsClient = new OBSClient();
   global.obsClient = obsClient;
@@ -80,9 +91,9 @@ async function initializeServices() {
     twitchAPIClient.startEventSub();
   }
 
-  // Initialize action manager
-  actionManager = new ActionManager();
-  global.actionManager = actionManager;
+  // Initialize MIDI client
+  midiClient = new MIDIClient();
+  global.midiClient = midiClient;
 
   console.log('Services initialized');
 }
@@ -313,6 +324,69 @@ function setupIPCHandlers() {
     }
   });
 
+  // MIDI handlers
+  ipcMain.handle('midi:connect', async (event, deviceName) => {
+    try {
+      await midiClient.connect(deviceName);
+      mainWindow.webContents.send('midi:connected', { device: midiClient.getConnectedDevice() });
+      return { success: true };
+    } catch (error) {
+      mainWindow.webContents.send('log:message', {
+        level: 'error',
+        message: `MIDI connection failed: ${error.message}`
+      });
+      throw error;
+    }
+  });
+
+  ipcMain.handle('midi:disconnect', async () => {
+    try {
+      await midiClient.disconnect();
+      mainWindow.webContents.send('midi:disconnected');
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('midi:getDevices', async () => {
+    try {
+      const devices = midiClient.refreshDevices();
+      return devices;
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('midi:getStatus', async () => {
+    try {
+      return midiClient.getStatus();
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('midi:startDetection', async (event) => {
+    try {
+      midiClient.startDetection((midiData) => {
+        // Send detected MIDI data back to renderer for configuration
+        mainWindow.webContents.send('midi:detected', midiData);
+      });
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
+  ipcMain.handle('midi:stopDetection', async () => {
+    try {
+      midiClient.stopDetection();
+      return { success: true };
+    } catch (error) {
+      throw error;
+    }
+  });
+
   // Settings handlers
   ipcMain.handle('settings:load', async () => {
     try {
@@ -339,6 +413,7 @@ function setupIPCHandlers() {
 // App event handlers
 app.whenReady().then(() => {
   setupIPCHandlers();
+  setupMIDIMessageHandling();
   createWindow();
   initializeServices();
 });
@@ -372,6 +447,19 @@ app.on('web-contents-created', (event, contents) => {
     }
   });
 });
+
+// Set up MIDI message handling
+function setupMIDIMessageHandling() {
+  // Set up global MIDI message handler
+  global.midiMessageHandler = async (midiData) => {
+    try {
+      // Handle the MIDI message through the action manager
+      await actionManager.handleMIDITrigger(midiData);
+    } catch (error) {
+      console.error('Error handling MIDI trigger:', error);
+    }
+  };
+}
 
 // IPC handlers will be added here as we implement features
 console.log('Debbot Electron app started');

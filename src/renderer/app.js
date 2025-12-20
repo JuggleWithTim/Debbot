@@ -94,6 +94,10 @@ class DebbotApp {
         // Settings
         document.getElementById('save-settings-btn').addEventListener('click', () => this.saveSettings());
 
+        // MIDI settings
+        document.getElementById('midi-refresh-btn').addEventListener('click', () => this.refreshMIDIDevices());
+        document.getElementById('midi-test-btn').addEventListener('click', () => this.testMIDIConnection());
+
         // Twitch API
         document.getElementById('twitch-api-login-btn').addEventListener('click', () => this.authenticateTwitchAPI());
         document.getElementById('twitch-api-logout-btn').addEventListener('click', () => this.logoutTwitchAPI());
@@ -123,6 +127,11 @@ class DebbotApp {
 
             // Listen for subscribers
             window.electronAPI.onSubscriber((event, subscriberData) => this.onSubscriber(subscriberData));
+
+            // Listen for MIDI events
+            window.electronAPI.onMIDIConnected((event, data) => this.onMIDIConnected(data));
+            window.electronAPI.onMIDIDisconnected(() => this.onMIDIDisconnected());
+            window.electronAPI.onMIDIDetected((event, midiData) => this.onMIDIDetected(midiData));
         }
 
         // IPC event listener for playing sounds
@@ -174,6 +183,10 @@ class DebbotApp {
         document.getElementById('twitch-username').value = this.settings.twitch?.username || '';
         document.getElementById('twitch-oauth').value = this.settings.twitch?.oauth || '';
         document.getElementById('twitch-channel').value = this.settings.twitch?.channel || '';
+
+        // Populate MIDI settings
+        this.populateMIDIDevices();
+        document.getElementById('midi-device').value = this.settings.midi?.device || '';
     }
 
     updateTriggerFields(triggerType) {
@@ -400,7 +413,7 @@ class DebbotApp {
     collectTriggerValues() {
         // Collect current values from all trigger form elements
         const triggerElements = document.querySelectorAll('.trigger-item');
-        this.currentAction.triggers = Array.from(triggerElements).map(triggerElement => {
+        const collectedTriggers = Array.from(triggerElements).map((triggerElement, index) => {
             const type = triggerElement.querySelector('.trigger-type').value;
             const config = {};
 
@@ -410,10 +423,17 @@ class DebbotApp {
             } else if (type === 'channel_points') {
                 const rewardSelect = triggerElement.querySelector('.trigger-reward');
                 config.reward = rewardSelect ? rewardSelect.value : '';
+            } else if (type === 'midi') {
+                // MIDI config is stored in currentAction.triggers, preserve it
+                if (this.currentAction.triggers[index] && this.currentAction.triggers[index].config) {
+                    Object.assign(config, this.currentAction.triggers[index].config);
+                }
             }
 
             return { type, config };
         });
+
+        this.currentAction.triggers = collectedTriggers;
     }
 
     addActionStep() {
@@ -472,6 +492,15 @@ class DebbotApp {
                     <option value="">Any Reward</option>
                     <!-- Rewards will be populated dynamically -->
                 </select>`;
+            } else if (trigger.type === 'midi') {
+                const noteDisplay = trigger.config.note !== undefined ? `Note ${trigger.config.note}` : 'Not configured';
+                const typeDisplay = this.getMIDIMessageTypeDisplay(trigger.config.messageType || 'noteon');
+                configHtml = `
+                    <div class="midi-config">
+                        <span class="midi-display">${noteDisplay} (${typeDisplay})</span>
+                        <button type="button" class="btn btn-small midi-detect-btn" onclick="app.startMIDIDetection(${index})">Detect Key</button>
+                    </div>
+                `;
             }
 
             triggerElement.innerHTML = `
@@ -481,6 +510,7 @@ class DebbotApp {
                     <option value="cheer" ${trigger.type === 'cheer' ? 'selected' : ''}>Cheer (Bits)</option>
                     <option value="subscriber" ${trigger.type === 'subscriber' ? 'selected' : ''}>Subscriber</option>
                     <option value="timer" ${trigger.type === 'timer' ? 'selected' : ''}>Timer</option>
+                    <option value="midi" ${trigger.type === 'midi' ? 'selected' : ''}>MIDI Note</option>
                 </select>
                 ${configHtml}
                 <button class="trigger-remove" onclick="app.removeTrigger(${index})">×</button>
@@ -582,20 +612,8 @@ class DebbotApp {
             return;
         }
 
-        // Collect triggers
-        const triggerElements = document.querySelectorAll('.trigger-item');
-        this.currentAction.triggers = Array.from(triggerElements).map(triggerElement => {
-            const type = triggerElement.querySelector('.trigger-type').value;
-            const config = {};
-
-            if (type === 'command') {
-                config.command = triggerElement.querySelector('.trigger-command').value.trim();
-            } else if (type === 'channel_points') {
-                config.reward = triggerElement.querySelector('.trigger-reward').value;
-            }
-
-            return { type, config };
-        });
+        // Collect trigger values (including MIDI config)
+        this.collectTriggerValues();
 
         // Update action data
         this.currentAction.name = name;
@@ -769,6 +787,9 @@ class DebbotApp {
                 username: document.getElementById('twitch-username').value,
                 oauth: document.getElementById('twitch-oauth').value,
                 channel: document.getElementById('twitch-channel').value
+            },
+            midi: {
+                device: document.getElementById('midi-device').value
             }
         };
 
@@ -777,7 +798,7 @@ class DebbotApp {
             this.settings = settings;
             this.addLogEntry({
                 level: 'success',
-                message: 'Settings saved to .env file - restart app for changes to take effect'
+                message: 'Settings saved successfully'
             });
         } catch (error) {
             console.error('Save settings error:', error);
@@ -1111,6 +1132,121 @@ class DebbotApp {
 
     clearLogs() {
         document.getElementById('logs-container').innerHTML = '';
+    }
+
+    // MIDI Methods
+    async startMIDIDetection(triggerIndex) {
+        try {
+            // Start MIDI detection mode
+            await window.electronAPI.midiStartDetection();
+
+            // Update UI to show detection in progress
+            const triggerElement = document.querySelectorAll('.trigger-item')[triggerIndex];
+            const detectBtn = triggerElement.querySelector('.midi-detect-btn');
+            const display = triggerElement.querySelector('.midi-display');
+
+            if (detectBtn && display) {
+                detectBtn.textContent = 'Listening...';
+                detectBtn.disabled = true;
+                display.textContent = 'Press a key on your MIDI device';
+
+                // Set up one-time listener for detection result
+                const onDetected = async (event, midiData) => {
+                    // Stop detection
+                    await window.electronAPI.midiStopDetection();
+
+                    // Update the trigger config
+                    this.currentAction.triggers[triggerIndex].config = {
+                        messageType: midiData.type,
+                        note: midiData.note,
+                        controller: midiData.controller,
+                        channel: midiData.channel
+                    };
+
+                    // Re-render triggers to show the detected key
+                    this.renderTriggers();
+
+                    // Remove this listener
+                    window.electronAPI.removeAllListeners('midi:detected');
+                };
+
+                window.electronAPI.onMIDIDetected(onDetected);
+            }
+
+            this.addLogEntry({ level: 'info', message: 'MIDI detection started - press a key on your device' });
+        } catch (error) {
+            console.error('MIDI detection error:', error);
+            this.addLogEntry({ level: 'error', message: `MIDI detection failed: ${error.message}` });
+        }
+    }
+
+    getMIDIMessageTypeDisplay(messageType) {
+        switch (messageType) {
+            case 'noteon': return 'Note On';
+            case 'noteoff': return 'Note Off';
+            case 'cc': return 'Control Change';
+            case 'pitch': return 'Pitch Bend';
+            default: return messageType || 'Unknown';
+        }
+    }
+
+    onMIDIConnected(data) {
+        this.addLogEntry({ level: 'success', message: `Connected to MIDI device: ${data.device}` });
+    }
+
+    onMIDIDisconnected() {
+        this.addLogEntry({ level: 'info', message: 'Disconnected from MIDI device' });
+    }
+
+    onMIDIDetected(midiData) {
+        console.log('MIDI detected:', midiData);
+    }
+
+    async populateMIDIDevices() {
+        try {
+            const devices = await window.electronAPI.midiGetDevices();
+            const deviceSelect = document.getElementById('midi-device');
+
+            // Clear existing options except the placeholder
+            deviceSelect.innerHTML = '<option value="">Select MIDI device...</option>';
+
+            // Add device options
+            devices.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device;
+                option.textContent = device;
+                deviceSelect.appendChild(option);
+            });
+
+            console.log('MIDI devices populated:', devices);
+        } catch (error) {
+            console.error('Failed to populate MIDI devices:', error);
+            const deviceSelect = document.getElementById('midi-device');
+            deviceSelect.innerHTML = '<option value="">Failed to load MIDI devices</option>';
+        }
+    }
+
+    async refreshMIDIDevices() {
+        this.addLogEntry({ level: 'info', message: 'Refreshing MIDI devices...' });
+        await this.populateMIDIDevices();
+        this.addLogEntry({ level: 'success', message: 'MIDI devices refreshed' });
+    }
+
+    async testMIDIConnection() {
+        const selectedDevice = document.getElementById('midi-device').value;
+        if (!selectedDevice) {
+            alert('Please select a MIDI device first');
+            return;
+        }
+
+        try {
+            this.addLogEntry({ level: 'info', message: `Testing connection to MIDI device: ${selectedDevice}` });
+            await window.electronAPI.midiConnect(selectedDevice);
+            this.addLogEntry({ level: 'success', message: 'MIDI device connected successfully' });
+        } catch (error) {
+            console.error('MIDI connection test failed:', error);
+            this.addLogEntry({ level: 'error', message: `MIDI connection test failed: ${error.message}` });
+        }
     }
 }
 

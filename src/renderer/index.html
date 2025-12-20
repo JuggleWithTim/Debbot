@@ -103,6 +103,22 @@
                 </div>
 
                 <div class="settings-section">
+                    <h3>MIDI Configuration</h3>
+                    <p class="settings-description">Select your MIDI input device for trigger detection.</p>
+                    <div class="form-group">
+                        <label for="midi-device">MIDI Device:</label>
+                        <select id="midi-device">
+                            <option value="">Select MIDI device...</option>
+                            <!-- MIDI devices will be populated here -->
+                        </select>
+                    </div>
+                    <div class="settings-buttons">
+                        <button id="midi-refresh-btn" class="btn btn-secondary">Refresh Devices</button>
+                        <button id="midi-test-btn" class="btn btn-info">Test Connection</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
                     <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
                 </div>
             </div>
