@@ -397,6 +397,25 @@ class DebbotApp {
         }));
     }
 
+    collectTriggerValues() {
+        // Collect current values from all trigger form elements
+        const triggerElements = document.querySelectorAll('.trigger-item');
+        this.currentAction.triggers = Array.from(triggerElements).map(triggerElement => {
+            const type = triggerElement.querySelector('.trigger-type').value;
+            const config = {};
+
+            if (type === 'command') {
+                const commandInput = triggerElement.querySelector('.trigger-command');
+                config.command = commandInput ? commandInput.value.trim() : '';
+            } else if (type === 'channel_points') {
+                const rewardSelect = triggerElement.querySelector('.trigger-reward');
+                config.reward = rewardSelect ? rewardSelect.value : '';
+            }
+
+            return { type, config };
+        });
+    }
+
     addActionStep() {
         // First, collect current step values from the form before adding new step
         this.collectCurrentStepValues();
@@ -418,6 +437,9 @@ class DebbotApp {
     }
 
     addTrigger() {
+        // First collect current trigger values from the form
+        this.collectTriggerValues();
+
         const trigger = {
             type: 'command',
             config: {}
@@ -428,6 +450,8 @@ class DebbotApp {
     }
 
     removeTrigger(index) {
+        // First collect current trigger values from the form
+        this.collectTriggerValues();
         this.currentAction.triggers.splice(index, 1);
         this.renderTriggers();
     }
@@ -479,6 +503,9 @@ class DebbotApp {
     }
 
     updateTriggerConfig(triggerIndex, newType) {
+        // First collect current trigger values from the form
+        this.collectTriggerValues();
+
         // Update the trigger type and reset config
         this.currentAction.triggers[triggerIndex].type = newType;
         this.currentAction.triggers[triggerIndex].config = {};
