@@ -64,7 +64,7 @@ class ActionManager {
 
         // Ensure action has required fields
         action.name = action.name || 'Unnamed Action';
-        action.trigger = action.trigger || 'command';
+        action.triggers = action.triggers || [{ type: 'command', config: {} }];
         action.steps = action.steps || [];
 
         this.actions.push(action);
@@ -108,16 +108,20 @@ class ActionManager {
         return this.actions.find(a => a.id === actionId);
     }
 
-    getActionsByTrigger(trigger) {
-        return this.actions.filter(a => a.trigger === trigger);
+    getActionsByTrigger(triggerType) {
+        return this.actions.filter(a =>
+            a.triggers && a.triggers.some(trigger => trigger.type === triggerType)
+        );
     }
 
     getActionsByCommand(command) {
         return this.actions.filter(a => {
-            if (a.trigger !== 'command') return false;
+            const commandTrigger = a.triggers.find(t => t.type === 'command');
+            if (!commandTrigger) return false;
 
             // Normalize command comparison by removing ! prefix
-            const normalizedStoredCommand = a.command.startsWith('!') ? a.command.substring(1) : a.command;
+            const normalizedStoredCommand = commandTrigger.config.command.startsWith('!') ?
+                commandTrigger.config.command.substring(1) : commandTrigger.config.command;
             const normalizedInputCommand = command.startsWith('!') ? command.substring(1) : command;
 
             return normalizedStoredCommand === normalizedInputCommand;
@@ -388,13 +392,14 @@ class ActionManager {
 
     getActionsByChannelPoints(rewardId) {
         return this.actions.filter(a => {
-            if (a.trigger !== 'channel_points') return false;
+            const channelPointTrigger = a.triggers.find(t => t.type === 'channel_points');
+            if (!channelPointTrigger) return false;
 
             // If no specific reward is set, trigger on any reward
-            if (!a.reward) return true;
+            if (!channelPointTrigger.config.reward) return true;
 
             // Otherwise, match the specific reward ID
-            return a.reward === rewardId;
+            return channelPointTrigger.config.reward === rewardId;
         });
     }
 
@@ -446,6 +451,77 @@ class ActionManager {
             } catch (error) {
                 console.error(`Failed to execute subscriber action ${action.name}:`, error);
             }
+        }
+    }
+
+    // MIDI trigger handling
+    async handleMIDITrigger(midiData) {
+        const { type, note, controller, value, velocity, channel } = midiData;
+
+        const actions = this.getActionsByMIDITrigger(midiData);
+        if (actions.length === 0) {
+            return;
+        }
+
+        console.log(`MIDI trigger: ${type} - ${this.getMIDIMessageDescription(midiData)}`);
+
+        // Execute all matching MIDI actions
+        for (const action of actions) {
+            try {
+                await this.executeAction(action.id, midiData);
+            } catch (error) {
+                console.error(`Failed to execute MIDI action ${action.name}:`, error);
+            }
+        }
+    }
+
+    getActionsByMIDITrigger(midiData) {
+        const { type, note, controller, value, velocity, channel } = midiData;
+
+        return this.actions.filter(action => {
+            const midiTrigger = action.triggers.find(t => t.type === 'midi');
+            if (!midiTrigger) return false;
+
+            const config = midiTrigger.config;
+
+            // Check message type
+            if (config.messageType !== type) return false;
+
+            // Check channel (if specified)
+            if (config.channel !== undefined && config.channel !== null && config.channel !== channel) {
+                return false;
+            }
+
+            // Check specific parameters based on message type
+            switch (type) {
+                case 'noteon':
+                case 'noteoff':
+                    return config.note === note;
+                case 'cc':
+                    return config.controller === controller;
+                case 'pitch':
+                    // Pitch bend doesn't have a specific value to match, just trigger on any pitch bend
+                    return true;
+                default:
+                    return false;
+            }
+        });
+    }
+
+    getMIDIMessageDescription(midiData) {
+        const { type, note, controller, value, velocity, channel } = midiData;
+
+        switch (type) {
+            case 'noteon':
+                return `Note ${note} (velocity: ${velocity}) on channel ${channel}`;
+            case 'noteoff':
+                return `Note ${note} off on channel ${channel}`;
+            case 'cc':
+                return `CC ${controller} = ${value} on channel ${channel}`;
+            case 'pitch':
+                return `Pitch bend = ${value} on channel ${channel}`;
+            default:
+                return `${type} on channel ${channel}`;
         }
     }
 
@@ -594,12 +670,20 @@ TWITCH_CLIENT_SECRET=${envVars.TWITCH_CLIENT_SECRET || 'your_client_secret_here'
             errors.push('Action must have a valid name');
         }
 
-        if (!['command', 'timer', 'channel_points', 'cheer', 'subscriber'].includes(action.trigger)) {
-            errors.push('Action must have a valid trigger type');
+        if (!Array.isArray(action.triggers) || action.triggers.length === 0) {
+            errors.push('Action must have at least one trigger');
+        } else {
+            action.triggers.forEach((trigger, index) => {
+                if (!trigger.type) {
+                    errors.push(`Trigger ${index + 1} is missing type`);
+        } else if (!['command', 'timer', 'channel_points', 'cheer', 'subscriber', 'midi'].includes(trigger.type)) {
+            errors.push(`Trigger ${index + 1} has invalid type: ${trigger.type}`);
         }
 
-        if (action.trigger === 'command' && (!action.command || typeof action.command !== 'string')) {
-            errors.push('Command-triggered actions must have a command');
+                if (trigger.type === 'command' && (!trigger.config?.command || typeof trigger.config.command !== 'string')) {
+                    errors.push(`Command trigger ${index + 1} must have a command`);
+                }
+            });
         }
 
         if (!Array.isArray(action.steps)) {

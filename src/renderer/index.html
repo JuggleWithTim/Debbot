@@ -103,6 +103,22 @@
                 </div>
 
                 <div class="settings-section">
+                    <h3>MIDI Configuration</h3>
+                    <p class="settings-description">Select your MIDI input device for trigger detection.</p>
+                    <div class="form-group">
+                        <label for="midi-device">MIDI Device:</label>
+                        <select id="midi-device">
+                            <option value="">Select MIDI device...</option>
+                            <!-- MIDI devices will be populated here -->
+                        </select>
+                    </div>
+                    <div class="settings-buttons">
+                        <button id="midi-refresh-btn" class="btn btn-secondary">Refresh Devices</button>
+                        <button id="midi-test-btn" class="btn btn-info">Test Connection</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
                     <button id="save-settings-btn" class="btn btn-primary">Save Settings</button>
                 </div>
             </div>
@@ -133,25 +149,11 @@
                     <input type="text" id="action-name" placeholder="Enter action name">
                 </div>
                 <div class="form-group">
-                    <label for="action-trigger">Trigger:</label>
-                    <select id="action-trigger">
-                        <option value="command">Chat Command</option>
-                        <option value="timer">Timer</option>
-                        <option value="channel_points">Channel Point Redeem</option>
-                        <option value="cheer">Cheer (Bits)</option>
-                        <option value="subscriber">Subscriber</option>
-                    </select>
-                </div>
-                <div class="form-group" id="command-group">
-                    <label for="action-command">Command:</label>
-                    <input type="text" id="action-command" placeholder="!command">
-                </div>
-                <div class="form-group" id="channel-points-group" style="display: none;">
-                    <label for="action-reward">Channel Point Reward:</label>
-                    <select id="action-reward">
-                        <option value="">Select a reward...</option>
-                        <!-- Rewards will be populated dynamically -->
-                    </select>
+                    <label>Triggers:</label>
+                    <div id="triggers-container" class="triggers-container">
+                        <!-- Triggers will be added here -->
+                    </div>
+                    <button id="add-trigger-btn" class="btn btn-secondary">Add Trigger</button>
                 </div>
                 <div class="form-group" id="permissions-group">
                     <label>Permissions:</label>

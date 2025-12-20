@@ -60,6 +60,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Sound playback
   onPlaySound: (callback) => ipcRenderer.on('play-sound', callback),
 
+  // MIDI functions
+  midiConnect: (deviceName) => ipcRenderer.invoke('midi:connect', deviceName),
+  midiDisconnect: () => ipcRenderer.invoke('midi:disconnect'),
+  midiGetDevices: () => ipcRenderer.invoke('midi:getDevices'),
+  midiGetStatus: () => ipcRenderer.invoke('midi:getStatus'),
+  midiStartDetection: () => ipcRenderer.invoke('midi:startDetection'),
+  midiStopDetection: () => ipcRenderer.invoke('midi:stopDetection'),
+
+  // MIDI event listeners
+  onMIDIConnected: (callback) => ipcRenderer.on('midi:connected', callback),
+  onMIDIDisconnected: (callback) => ipcRenderer.on('midi:disconnected', callback),
+  onMIDIDetected: (callback) => ipcRenderer.on('midi:detected', callback),
+
   // Remove all listeners (cleanup)
   removeAllListeners: (event) => ipcRenderer.removeAllListeners(event)
 });
