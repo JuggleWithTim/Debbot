@@ -357,17 +357,17 @@ class ActionManager {
     }
 
     async executeTwitchClipStep() {
-        if (!global.twitchApiClient || !global.twitchApiClient.isAuthenticated()) {
+        if (!global.twitchAPIClient || !global.twitchAPIClient.isAuthenticated()) {
             throw new Error('Twitch API not authenticated');
         }
 
         // Get the broadcaster ID (should be the authenticated user's ID)
-        const user = global.twitchApiClient.getUser();
+        const user = global.twitchAPIClient.getUser();
         if (!user) {
             throw new Error('No authenticated Twitch user found');
         }
 
-        const clip = await global.twitchApiClient.createClip(user.id);
+        const clip = await global.twitchAPIClient.createClip(user.id);
 
         // Log the action
         if (global.mainWindow) {
