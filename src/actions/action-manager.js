@@ -369,12 +369,26 @@ class ActionManager {
 
         const clip = await global.twitchAPIClient.createClip(user.id);
 
-        // Log the action
-        if (global.mainWindow) {
-            global.mainWindow.webContents.send('log:message', {
-                level: 'success',
-                message: `Created clip: ${clip.edit_url}`
-            });
+        // Send clip URL to chat
+        if (global.twitchClient && global.twitchClient.isConnected()) {
+            const clipMessage = `📹 Clip created: ${clip.edit_url}`;
+            await global.twitchClient.sendMessage(clipMessage);
+
+            // Log the action
+            if (global.mainWindow) {
+                global.mainWindow.webContents.send('log:message', {
+                    level: 'success',
+                    message: `Created clip and sent to chat: ${clip.edit_url}`
+                });
+            }
+        } else {
+            // If Twitch chat not connected, just log it
+            if (global.mainWindow) {
+                global.mainWindow.webContents.send('log:message', {
+                    level: 'success',
+                    message: `Created clip: ${clip.edit_url}`
+                });
+            }
         }
     }
 
